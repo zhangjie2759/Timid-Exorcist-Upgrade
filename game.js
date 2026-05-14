@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.1_corridor_assets';
+  const VERSION = 'v0.12.2_wall_aligned';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -204,7 +204,7 @@
     const gameH = gameBottom - gameTop;
 
     const doorH = clamp(Math.min(gameH * 0.82, w * 1.34, 628), 380, 628);
-    const doorW = doorH * 0.62;
+    const doorW = doorH * 0.56;
     const doorX = (w - doorW) / 2;
     const doorY = gameTop + Math.max(16, (gameH - doorH) * 0.42);
 
@@ -854,11 +854,34 @@
   function drawWallBackground() {
     const l = state.layout;
     const wall = getAssetImage(ROOM_ASSETS.wall);
-    if (wall) drawCoverImage(wall, 0, l.topH, l.w, l.h - l.topH);
-    else {
+
+    if (!wall) {
       ctx.fillStyle = '#d8ccbd';
       ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
+      return;
     }
+
+    // 墙素材本身是正方形，并且中间已经带一个白色门洞。
+    // 不能再用 cover 拉满全屏，否则门洞会被放得过大，和门/门框对不上。
+    // 这里先用左侧墙面区域铺满背景，再把完整墙图按照“素材门洞”对齐到当前门洞。
+    ctx.save();
+
+    // 1) 用不含白色门洞的左侧墙面做基础纹理，铺满整个游戏区。
+    const texW = Math.max(80, Math.floor(wall.naturalWidth * 0.28));
+    const texH = wall.naturalHeight;
+    ctx.drawImage(wall, 0, 0, texW, texH, 0, l.topH, l.w, l.h - l.topH);
+
+    // 2) 把墙图里的白色门洞精确对齐到代码里的 hole。
+    // 这组数值来自当前 room/墙.png：白色门洞约 x=418, y=197, w=416, h=748。
+    const srcHole = { x: 418, y: 197, w: 416, h: 748 };
+    const scale = Math.max(l.hole.w / srcHole.w, l.hole.h / srcHole.h);
+    const drawW = wall.naturalWidth * scale;
+    const drawH = wall.naturalHeight * scale;
+    const drawX = (l.hole.x + l.hole.w / 2) - (srcHole.x + srcHole.w / 2) * scale;
+    const drawY = l.hole.y - srcHole.y * scale;
+
+    ctx.drawImage(wall, drawX, drawY, drawW, drawH);
+    ctx.restore();
   }
 
   function drawRoomBack(hole) {
