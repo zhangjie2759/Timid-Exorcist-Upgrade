@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.5_corridor_slide_fix';
+  const VERSION = 'v0.12.7_sync_align';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -222,7 +222,7 @@
     const gameH = gameBottom - gameTop;
 
     const doorH = clamp(Math.min(gameH * 0.82, w * 1.34, 628), 380, 628);
-    const doorW = doorH * 0.56;
+    const doorW = doorH * 0.582;
     const doorX = (w - doorW) / 2;
     const doorY = gameTop + Math.max(16, (gameH - doorH) * 0.42);
 
@@ -670,10 +670,10 @@
 
   function menuButtons() {
     const l = state.layout;
-    const bw = Math.min(270, l.w * 0.70);
+    const bw = Math.min(286, l.w * 0.72);
     const bh = 58;
     const x = (l.w - bw) / 2;
-    const y = l.h * 0.45;
+    const y = Math.max(l.h * 0.47, l.h * 0.17 + 238);
     return {
       start: { x, y, w: bw, h: bh },
       rules: { x, y: y + 76, w: bw, h: bh },
@@ -856,18 +856,30 @@
     const l = state.layout;
     drawMenuBackground();
 
+    const titleW = Math.min(318, l.w * 0.74);
+    const titleH = 126;
+    const titleX = (l.w - titleW) / 2;
+    const titleY = Math.max(112, l.h * 0.155);
+
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+
     ctx.fillStyle = 'rgba(255,253,246,0.94)';
-    roundRect(l.w / 2 - 146, l.h * 0.17, 292, 134, 24, true, true, 5);
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 5;
+    roundRect(titleX, titleY, titleW, titleH, 24, true, true, 5);
+
     ctx.fillStyle = '#111';
-    ctx.font = isEn() ? '900 31px system-ui, sans-serif' : '900 43px system-ui, sans-serif';
-    ctx.fillText(isEn() ? 'TIMID EXORCIST' : '胆小除魔师', l.w / 2, l.h * 0.235);
-    ctx.font = '700 15px system-ui, sans-serif';
-    ctx.fillText(isEn() ? 'Endless corridor. Open and decide.' : '无限长廊，开门识别异常', l.w / 2, l.h * 0.305);
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText(VERSION, l.w / 2, l.h * 0.36);
+    ctx.font = isEn() ? '900 28px system-ui, sans-serif' : '900 38px system-ui, sans-serif';
+    ctx.fillText(isEn() ? 'TIMID EXORCIST' : '胆小除魔师', l.w / 2, titleY + 54);
+
+    ctx.font = isEn() ? '800 12px system-ui, sans-serif' : '800 14px system-ui, sans-serif';
+    ctx.fillText(isEn() ? 'Endless corridor · Open and decide' : '无限长廊 · 开门识别异常', l.w / 2, titleY + 90);
+
+    // 版本号放在标题框外，避免和副标题/边框打架。
+    ctx.font = '800 11px system-ui, sans-serif';
+    ctx.fillText(VERSION, l.w / 2, titleY + titleH + 34);
     ctx.restore();
 
     const b = menuButtons();
@@ -880,7 +892,7 @@
   function drawMenuBackground() {
     const l = state.layout;
 
-    // 主页改成纯白底，只放鬼火，不放门、不放墙。
+    // 首页彻底去掉背景图：纯白背景 + 鬼火。
     ctx.save();
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, l.w, l.h);
@@ -892,22 +904,22 @@
   function drawMenuGhostFires() {
     const l = state.layout;
     const positions = [
-      [0.20, 0.22, 0.12],
-      [0.78, 0.20, 0.10],
-      [0.16, 0.72, 0.11],
-      [0.84, 0.66, 0.13],
-      [0.50, 0.80, 0.09],
-      [0.34, 0.42, 0.08],
-      [0.68, 0.46, 0.085]
+      [0.18, 0.24, 0.095],
+      [0.82, 0.23, 0.090],
+      [0.15, 0.76, 0.105],
+      [0.84, 0.70, 0.100],
+      [0.50, 0.86, 0.060],
+      [0.30, 0.48, 0.055],
+      [0.70, 0.50, 0.055]
     ];
 
     ctx.save();
     positions.forEach((p, i) => {
       const img = getAssetImage(GHOST_FIRE_FILES[i % GHOST_FIRE_FILES.length]);
-      const x = p[0] * l.w + Math.sin(state.t * (0.9 + i * 0.07) + i) * 14;
-      const y = p[1] * l.h + Math.cos(state.t * (1.1 + i * 0.09) + i * 1.7) * 16;
-      const size = Math.max(34, Math.min(72, l.w * p[2]));
-      ctx.globalAlpha = 0.48 + Math.sin(state.t * 2.1 + i) * 0.08;
+      const x = p[0] * l.w + Math.sin(state.t * (0.9 + i * 0.07) + i) * 12;
+      const y = p[1] * l.h + Math.cos(state.t * (1.1 + i * 0.09) + i * 1.7) * 14;
+      const size = Math.max(28, Math.min(64, l.w * p[2]));
+      ctx.globalAlpha = 0.36 + Math.sin(state.t * 2.1 + i) * 0.06;
       if (img) ctx.drawImage(img, x - size / 2, y - size * 0.65, size, size * 1.28);
       else drawCodeGhostFire(x, y, size, 0.8);
     });
@@ -934,10 +946,11 @@
     }
 
     if (state.mode === 'corridorTransition') {
-      // 转场逻辑：当前门位和画面外右侧的下一门位，是两张连续的“门位卡片”。
-      // 两者一起向左移动，下一门位顶替当前位置；不再做“先关门再滑走”的额外动作。
-      const oldDoor = state.transitionStartDoor || state.door;
-      drawCorridorCard(state.corridorOffset, state.content, oldDoor);
+      // 转场时必须把门、门框、墙、内容当作一个完整门位模块同步横移。
+      // 打开的门板如果继续保持打开，会叠加“门板横滑 + 模块横移”两套位移，
+      // 视觉上就会像速度不同步，并且容易在屏幕边缘被裁切。
+      // 所以横移阶段统一绘制为闭合门位，保证整组图片同步移动。
+      drawCorridorCard(state.corridorOffset, state.content, 0);
       drawCorridorCard(state.corridorOffset + l.w, state.nextContent, 0);
     } else {
       drawCorridorCard(0, state.content, state.door);
@@ -981,7 +994,7 @@
     const l = state.layout;
     const wall = getAssetImage(ROOM_ASSETS.wall);
 
-    // 画面外不再铺墙。每个门位只画自己的“墙/地面模块”，其余区域保持白色。
+    // 画面外不铺墙。每个门位只画自己的墙/地面模块，其余区域保持白色。
     if (!wall) {
       ctx.save();
       ctx.fillStyle = '#f4efe8';
@@ -992,9 +1005,10 @@
 
     ctx.save();
 
-    // room/墙.png 是一个带门洞的完整模块。
-    // 这里只把它按素材里的白色门洞对齐到当前门洞，不再用它的边缘纹理铺满整个屏幕。
-    const srcHole = { x: 418, y: 197, w: 416, h: 748 };
+    // room/墙.png 的真实白色门洞区域：
+    // x=420, y=229, w=418, h=718。
+    // 用这组数值把墙图的白色门洞精确贴到代码门洞上，避免白边。
+    const srcHole = { x: 420, y: 229, w: 418, h: 718 };
     const scale = Math.max(l.hole.w / srcHole.w, l.hole.h / srcHole.h);
     const drawW = wall.naturalWidth * scale;
     const drawH = wall.naturalHeight * scale;
@@ -1011,7 +1025,7 @@
     ctx.beginPath();
     ctx.rect(hole.x + 4, hole.y + 4, hole.w - 8, hole.h - 8);
     ctx.clip();
-    if (room) drawCoverImage(room, hole.x, hole.y, hole.w, hole.h);
+    if (room) drawCoverImage(room, hole.x + 6, hole.y + 6, hole.w - 12, hole.h - 12);
     else {
       ctx.fillStyle = '#efe5d8';
       ctx.fillRect(hole.x, hole.y, hole.w, hole.h);
@@ -1039,7 +1053,8 @@
     const frame = getAssetImage(ROOM_ASSETS.frame);
     ctx.save();
     if (frame) {
-      drawStretchImage(frame, hole.x - hole.w * 0.09, hole.y - hole.h * 0.035, hole.w * 1.18, hole.h * 1.07);
+      // 门框和门共用同一个绘制框，确保尺寸完全对齐。
+      drawCroppedStretchImage(frame, hole.x, hole.y, hole.w, hole.h, 2);
     } else {
       ctx.strokeStyle = '#2d1c12';
       ctx.lineWidth = 10;
@@ -1055,8 +1070,10 @@
     const alpha = doorAlphaForGhostEye();
     ctx.save();
     ctx.globalAlpha = alpha;
-    if (img) drawStretchImage(img, x, door.y, door.w, door.h);
-    else {
+    if (img) {
+      // 裁掉门图四周极细白边，再拉到和门框同一尺寸。
+      drawCroppedStretchImage(img, x, door.y, door.w, door.h, 2);
+    } else {
       ctx.fillStyle = '#4a2b1c';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 5;
@@ -1076,7 +1093,7 @@
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(hole.x + 5, hole.y + 5, hole.w - 10, hole.h - 10);
+    ctx.rect(hole.x + 8, hole.y + 8, hole.w - 16, hole.h - 16);
     ctx.clip();
 
     if (content.type === 'person') {
@@ -1838,6 +1855,15 @@
       dw = dh * ar;
     }
     ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  }
+
+  function drawCroppedStretchImage(img, x, y, w, h, crop = 0) {
+    const c = Math.max(0, crop || 0);
+    const sx = c;
+    const sy = c;
+    const sw = Math.max(1, img.naturalWidth - c * 2);
+    const sh = Math.max(1, img.naturalHeight - c * 2);
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   }
 
   function drawStretchImage(img, x, y, w, h) {
