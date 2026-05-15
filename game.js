@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.2_wall_aligned';
+  const VERSION = 'v0.12.3_feedback_tuning';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -32,16 +32,16 @@
   ];
 
   const PEOPLE = [
-    { name: '兔子', nameEn: 'Rabbit', file: '小动物/兔子.png', scale: 1.08, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' },
-    { name: '刺猬', nameEn: 'Hedgehog', file: '小动物/刺猬.png', scale: 1.08, desc: '看起来警觉，但不是鬼。', descEn: 'Looks alert, but it is not a ghost.' },
-    { name: '小狗', nameEn: 'Dog', file: '小动物/小狗.png', scale: 1.08, desc: '安全的小动物。', descEn: 'A safe little animal.' },
-    { name: '小猪', nameEn: 'Piglet', file: '小动物/小猪.png', scale: 1.08, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' },
-    { name: '小猫', nameEn: 'Cat', file: '小动物/小猫.png', scale: 1.08, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' },
-    { name: '松鼠', nameEn: 'Squirrel', file: '小动物/松鼠.png', scale: 1.08, desc: '动作很快，但不是鬼。', descEn: 'It moves quickly, but it is not a ghost.' },
-    { name: '熊猫', nameEn: 'Panda', file: '小动物/熊猫.png', scale: 1.08, desc: '安全的小动物。', descEn: 'A safe little animal.' },
-    { name: '狐狸', nameEn: 'Fox', file: '小动物/狐狸.png', scale: 1.08, desc: '看起来狡猾，但不是鬼。', descEn: 'Looks cunning, but it is not a ghost.' },
-    { name: '猫头鹰', nameEn: 'Owl', file: '小动物/猫头鹰.png', scale: 1.08, desc: '眼神很怪，但目前安全。', descEn: 'Its eyes are strange, but it is safe.' },
-    { name: '鸭子', nameEn: 'Duck', file: '小动物/鸭子.png', scale: 1.08, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' }
+    { name: '兔子', nameEn: 'Rabbit', file: '小动物/兔子.png', scale: 0.80, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' },
+    { name: '刺猬', nameEn: 'Hedgehog', file: '小动物/刺猬.png', scale: 0.80, desc: '看起来警觉，但不是鬼。', descEn: 'Looks alert, but it is not a ghost.' },
+    { name: '小狗', nameEn: 'Dog', file: '小动物/小狗.png', scale: 0.80, desc: '安全的小动物。', descEn: 'A safe little animal.' },
+    { name: '小猪', nameEn: 'Piglet', file: '小动物/小猪.png', scale: 0.80, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' },
+    { name: '小猫', nameEn: 'Cat', file: '小动物/小猫.png', scale: 0.80, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' },
+    { name: '松鼠', nameEn: 'Squirrel', file: '小动物/松鼠.png', scale: 0.80, desc: '动作很快，但不是鬼。', descEn: 'It moves quickly, but it is not a ghost.' },
+    { name: '熊猫', nameEn: 'Panda', file: '小动物/熊猫.png', scale: 0.80, desc: '安全的小动物。', descEn: 'A safe little animal.' },
+    { name: '狐狸', nameEn: 'Fox', file: '小动物/狐狸.png', scale: 0.80, desc: '看起来狡猾，但不是鬼。', descEn: 'Looks cunning, but it is not a ghost.' },
+    { name: '猫头鹰', nameEn: 'Owl', file: '小动物/猫头鹰.png', scale: 0.80, galleryScale: 1.35, desc: '眼神很怪，但目前安全。', descEn: 'Its eyes are strange, but it is safe.' },
+    { name: '鸭子', nameEn: 'Duck', file: '小动物/鸭子.png', scale: 0.80, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' }
   ];
 
   const GHOST_FIRE_FILES = [
@@ -75,6 +75,7 @@
     dragStartDoor: 0,
     danger: 0,
     transition: 0,
+    transitionStartDoor: 0,
     corridorOffset: 0,
     pendingNextRoom: 2,
     ghostEye: 0,
@@ -327,6 +328,7 @@
   function startCorridorAdvance(toRoom = state.room + 1) {
     state.mode = 'corridorTransition';
     state.transition = 0;
+    state.transitionStartDoor = state.door;
     state.corridorOffset = 0;
     state.pendingNextRoom = toRoom;
     state.nextContent = makeContent(toRoom);
@@ -469,7 +471,7 @@
     if (state.screen !== 'game') return;
 
     if (state.mode === 'corridorTransition') {
-      state.transition += dt * 2.7;
+      state.transition += dt * 1.85;
       const t = easeInOut(clamp(state.transition, 0, 1));
       state.corridorOffset = -state.layout.w * t;
       if (state.transition >= 1) finishCorridorAdvance();
@@ -783,15 +785,43 @@
   function drawMenuBackground() {
     const l = state.layout;
     const wall = getAssetImage(ROOM_ASSETS.wall);
-    if (wall) drawCoverImage(wall, 0, 0, l.w, l.h);
-    else {
-      ctx.fillStyle = '#e8dfd2';
+
+    // 主页不再放门，只保留浅墙面氛围 + 几个鬼火。
+    if (wall) {
+      ctx.save();
+      ctx.globalAlpha = 0.42;
+      drawCoverImage(wall, 0, 0, l.w, l.h);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#eee7dc';
       ctx.fillRect(0, 0, l.w, l.h);
     }
+
+    drawMenuGhostFires();
+  }
+
+  function drawMenuGhostFires() {
+    const l = state.layout;
+    const positions = [
+      [0.20, 0.22, 0.12],
+      [0.78, 0.20, 0.10],
+      [0.16, 0.72, 0.11],
+      [0.84, 0.66, 0.13],
+      [0.50, 0.80, 0.09],
+      [0.34, 0.42, 0.08],
+      [0.68, 0.46, 0.085]
+    ];
+
     ctx.save();
-    ctx.globalAlpha = 0.20;
-    const room = getAssetImage(ROOM_ASSETS.door);
-    if (room) drawContainImage(room, l.w / 2 - 100, l.h * 0.53, 200, 260);
+    positions.forEach((p, i) => {
+      const img = getAssetImage(GHOST_FIRE_FILES[i % GHOST_FIRE_FILES.length]);
+      const x = p[0] * l.w + Math.sin(state.t * (0.9 + i * 0.07) + i) * 14;
+      const y = p[1] * l.h + Math.cos(state.t * (1.1 + i * 0.09) + i * 1.7) * 16;
+      const size = Math.max(34, Math.min(72, l.w * p[2]));
+      ctx.globalAlpha = 0.48 + Math.sin(state.t * 2.1 + i) * 0.08;
+      if (img) ctx.drawImage(img, x - size / 2, y - size * 0.65, size, size * 1.28);
+      else drawCodeGhostFire(x, y, size, 0.8);
+    });
     ctx.restore();
   }
 
@@ -811,7 +841,12 @@
     }
 
     if (state.mode === 'corridorTransition') {
-      drawCorridorCard(state.corridorOffset, state.content, state.door);
+      const moveT = easeInOut(clamp(state.transition, 0, 1));
+      const closeT = clamp(moveT * 1.75, 0, 1);
+      const oldDoor = lerp(state.transitionStartDoor || state.door, 0, closeT);
+
+      // 旧门位先关门再滑走，新门位从右侧滑入，整体更像人在长廊向右移动。
+      drawCorridorCard(state.corridorOffset, state.content, oldDoor);
       drawCorridorCard(state.corridorOffset + l.w, state.nextContent, 0);
     } else {
       drawCorridorCard(0, state.content, state.door);
@@ -959,12 +994,12 @@
     ctx.clip();
 
     if (content.type === 'person') {
-      drawCharacter(content.person, door.x + door.w / 2, floorY, door.h * 0.58, 'person', 1);
+      drawCharacter(content.person, door.x + door.w / 2, floorY, door.h * 0.50, 'person', 1);
     } else if (content.type === 'ghost') {
       const count = content.ghosts.length;
       const approach = content === state.content ? ghostApproachStep() : 0;
       const dangerScale = 1 + approach * 0.68;
-      const baseH = door.h * (count === 1 ? 0.62 : count === 2 ? 0.50 : 0.40);
+      const baseH = door.h * (count === 1 ? 0.56 : count === 2 ? 0.45 : 0.36);
       const spread = door.w * (count === 1 ? 0 : count === 2 ? 0.25 : 0.30);
       content.ghosts.forEach((g, i) => {
         const gx = door.x + door.w / 2 + (count === 1 ? 0 : (i - (count - 1) / 2) * spread);
@@ -975,15 +1010,16 @@
     } else if (content.type === 'boss') {
       const approach = state.mode === 'bossFight' && content === state.content ? Math.floor(state.door * 8) / 8 : 0;
       const scale = state.mode === 'bossFight' && content === state.content ? 1 + approach * 0.45 : 1;
-      drawCharacter(content.bossGhost, door.x + door.w / 2, floorY + door.h * 0.02, door.h * 0.76, 'boss', scale);
-      drawGhostFires(content.bossGhost, door.x + door.w / 2, floorY - door.h * 0.52, door.h * 0.80, (content.bossGhost.fire || 3) + 2, 9);
+      drawCharacter(content.bossGhost, door.x + door.w / 2, floorY + door.h * 0.02, door.h * 0.70, 'boss', scale);
+      drawGhostFires(content.bossGhost, door.x + door.w / 2, floorY - door.h * 0.50, door.h * 0.74, (content.bossGhost.fire || 3) + 2, 9);
     }
     ctx.restore();
   }
 
   function drawCharacter(def, x, floorY, targetH, kind, scale = 1) {
     const img = getAssetImage(def.file);
-    const h = targetH * scale * (def.scale || 1);
+    const roleScale = kind === 'ghost' ? 0.92 : kind === 'boss' ? 0.94 : 1;
+    const h = targetH * scale * (def.scale || 1) * roleScale;
     const aspect = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 0.70;
     const w = h * aspect;
     const y = floorY - h;
@@ -1479,8 +1515,31 @@
 
   function drawCardImage(item, box) {
     const img = getAssetImage(item.file);
-    if (img) drawContainImage(img, box.x + 2, box.y + 2, box.w - 4, box.h - 4);
-    else drawFallbackCharacter(item.name, box.x + box.w / 2, box.y + box.h * 0.1, box.w * 0.55, box.h * 0.86, state.galleryTab === 'people' ? 'person' : 'ghost');
+    if (img) {
+      const pad = 2;
+      const x = box.x + pad;
+      const y = box.y + pad;
+      const w = box.w - pad * 2;
+      const h = box.h - pad * 2;
+      const galleryScale = item.galleryScale || 1;
+
+      if (galleryScale === 1) {
+        drawContainImage(img, x, y, w, h);
+      } else {
+        const ar = img.naturalWidth / img.naturalHeight;
+        let dw = w;
+        let dh = dw / ar;
+        if (dh > h) {
+          dh = h;
+          dw = dh * ar;
+        }
+        dw *= galleryScale;
+        dh *= galleryScale;
+        ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      }
+    } else {
+      drawFallbackCharacter(item.name, box.x + box.w / 2, box.y + box.h * 0.1, box.w * 0.55, box.h * 0.86, state.galleryTab === 'people' ? 'person' : 'ghost');
+    }
   }
 
   function drawUnknownEgg(box, cardW) {
