@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.4_preload_bar';
+  const VERSION = 'v0.12.5_corridor_slide_fix';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -498,7 +498,7 @@
     if (state.screen !== 'game') return;
 
     if (state.mode === 'corridorTransition') {
-      state.transition += dt * 1.85;
+      state.transition += dt * 1.65;
       const t = easeInOut(clamp(state.transition, 0, 1));
       state.corridorOffset = -state.layout.w * t;
       if (state.transition >= 1) finishCorridorAdvance();
@@ -792,17 +792,10 @@
     const ratio = clamp(Math.max(p.ratio * 0.92, timeRatio * 0.28), 0, 1);
 
     ctx.save();
-    const wall = getAssetImage(ROOM_ASSETS.wall);
-    if (wall) {
-      ctx.globalAlpha = 0.38;
-      drawCoverImage(wall, 0, 0, l.w, l.h);
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.fillStyle = '#eee7dc';
-      ctx.fillRect(0, 0, l.w, l.h);
-    }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, l.w, l.h);
 
-    // 加载页只放鬼火，不放门，避免和主页混淆。
+    // 加载页只放鬼火，不放门、不放墙，避免和游戏场景混淆。
     const firePositions = [
       [0.24, 0.26, 0.12],
       [0.76, 0.28, 0.10],
@@ -886,18 +879,12 @@
 
   function drawMenuBackground() {
     const l = state.layout;
-    const wall = getAssetImage(ROOM_ASSETS.wall);
 
-    // 主页不再放门，只保留浅墙面氛围 + 几个鬼火。
-    if (wall) {
-      ctx.save();
-      ctx.globalAlpha = 0.42;
-      drawCoverImage(wall, 0, 0, l.w, l.h);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = '#eee7dc';
-      ctx.fillRect(0, 0, l.w, l.h);
-    }
+    // 主页改成纯白底，只放鬼火，不放门、不放墙。
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, l.w, l.h);
+    ctx.restore();
 
     drawMenuGhostFires();
   }
@@ -934,6 +921,10 @@
     ctx.rect(0, l.topH, l.w, l.h - l.topH);
     ctx.clip();
 
+    // 游戏区域外部留白，不再在门位外侧铺墙。
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
+
     const shake = screenShakeAmount();
     if (shake > 0) {
       ctx.translate(
@@ -943,11 +934,9 @@
     }
 
     if (state.mode === 'corridorTransition') {
-      const moveT = easeInOut(clamp(state.transition, 0, 1));
-      const closeT = clamp(moveT * 1.75, 0, 1);
-      const oldDoor = lerp(state.transitionStartDoor || state.door, 0, closeT);
-
-      // 旧门位先关门再滑走，新门位从右侧滑入，整体更像人在长廊向右移动。
+      // 转场逻辑：当前门位和画面外右侧的下一门位，是两张连续的“门位卡片”。
+      // 两者一起向左移动，下一门位顶替当前位置；不再做“先关门再滑走”的额外动作。
+      const oldDoor = state.transitionStartDoor || state.door;
       drawCorridorCard(state.corridorOffset, state.content, oldDoor);
       drawCorridorCard(state.corridorOffset + l.w, state.nextContent, 0);
     } else {
@@ -992,24 +981,19 @@
     const l = state.layout;
     const wall = getAssetImage(ROOM_ASSETS.wall);
 
+    // 画面外不再铺墙。每个门位只画自己的“墙/地面模块”，其余区域保持白色。
     if (!wall) {
-      ctx.fillStyle = '#d8ccbd';
-      ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
+      ctx.save();
+      ctx.fillStyle = '#f4efe8';
+      roundRect(l.hole.x - l.hole.w * 0.36, l.hole.y - l.hole.h * 0.08, l.hole.w * 1.72, l.hole.h * 1.16, 0, true, false, 0);
+      ctx.restore();
       return;
     }
 
-    // 墙素材本身是正方形，并且中间已经带一个白色门洞。
-    // 不能再用 cover 拉满全屏，否则门洞会被放得过大，和门/门框对不上。
-    // 这里先用左侧墙面区域铺满背景，再把完整墙图按照“素材门洞”对齐到当前门洞。
     ctx.save();
 
-    // 1) 用不含白色门洞的左侧墙面做基础纹理，铺满整个游戏区。
-    const texW = Math.max(80, Math.floor(wall.naturalWidth * 0.28));
-    const texH = wall.naturalHeight;
-    ctx.drawImage(wall, 0, 0, texW, texH, 0, l.topH, l.w, l.h - l.topH);
-
-    // 2) 把墙图里的白色门洞精确对齐到代码里的 hole。
-    // 这组数值来自当前 room/墙.png：白色门洞约 x=418, y=197, w=416, h=748。
+    // room/墙.png 是一个带门洞的完整模块。
+    // 这里只把它按素材里的白色门洞对齐到当前门洞，不再用它的边缘纹理铺满整个屏幕。
     const srcHole = { x: 418, y: 197, w: 416, h: 748 };
     const scale = Math.max(l.hole.w / srcHole.w, l.hole.h / srcHole.h);
     const drawW = wall.naturalWidth * scale;
