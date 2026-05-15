@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.7_sync_align';
+  const VERSION = 'v0.12.8_card_clip';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -498,7 +498,7 @@
     if (state.screen !== 'game') return;
 
     if (state.mode === 'corridorTransition') {
-      state.transition += dt * 1.65;
+      state.transition += dt * 1.42;
       const t = easeInOut(clamp(state.transition, 0, 1));
       state.corridorOffset = -state.layout.w * t;
       if (state.transition >= 1) finishCorridorAdvance();
@@ -975,6 +975,13 @@
     const l = state.layout;
     ctx.save();
     ctx.translate(offset, 0);
+
+    // 关键：每一个“门位模块”必须单独裁切在自己的屏宽范围内。
+    // 否则下一间的墙图会因为图片本身比门洞宽，提前伸进当前门位，
+    // 在横移动画中盖住当前门/门框，产生闪墙和不同步感。
+    ctx.beginPath();
+    ctx.rect(0, l.topH, l.w, l.h - l.topH);
+    ctx.clip();
 
     drawWallBackground();
     drawRoomBack(l.hole);
