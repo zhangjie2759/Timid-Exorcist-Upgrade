@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.3_feedback_tuning';
+  const VERSION = 'v0.12.4_preload_bar';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -61,7 +61,7 @@
   ];
 
   const state = {
-    screen: 'menu',
+    screen: 'preload',
     lang: 'zh',
     difficulty: 'normal',
     room: 1,
@@ -83,6 +83,9 @@
     sealFlash: 0,
     bossDefeated: {},
     toast: null,
+    preloadElapsed: 0,
+    preloadMin: 0.8,
+    preloadMax: 5.0,
     resultReason: '',
     galleryTab: 'ghosts',
     galleryScroll: 0,
@@ -175,14 +178,28 @@
     return null;
   }
 
-  function preloadAll() {
-    const files = [
+  function preloadFilesList() {
+    return Array.from(new Set([
       ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.seal,
       ...GHOST_FIRE_FILES,
       ...GHOSTS.map(g => g.file),
       ...PEOPLE.map(p => p.file)
-    ];
-    Array.from(new Set(files)).forEach(loadImageWithFallback);
+    ]));
+  }
+
+  function preloadAll() {
+    preloadFilesList().forEach(loadImageWithFallback);
+  }
+
+  function preloadProgress() {
+    const files = preloadFilesList();
+    if (!files.length) return { ratio: 1, loaded: 0, total: 0 };
+    let loaded = 0;
+    files.forEach(file => {
+      const img = getAssetImage(file);
+      if (img && img.complete && img.naturalWidth) loaded += 1;
+    });
+    return { ratio: loaded / files.length, loaded, total: files.length };
   }
 
   function resize() {
@@ -460,6 +477,16 @@
 
   function update(dt) {
     state.t += dt;
+
+    if (state.screen === 'preload') {
+      state.preloadElapsed += dt;
+      const p = preloadProgress();
+      const ready = p.ratio >= 0.98 || state.preloadElapsed >= state.preloadMax;
+      if (state.preloadElapsed >= state.preloadMin && ready) {
+        state.screen = 'menu';
+      }
+      return;
+    }
 
     if (state.toast) {
       state.toast.time -= dt;
@@ -749,12 +776,87 @@
 
   function draw() {
     clear();
-    if (state.screen === 'menu') drawMenu();
+    if (state.screen === 'preload') drawPreload();
+    else if (state.screen === 'menu') drawMenu();
     else if (state.screen === 'rules') drawRules();
     else if (state.screen === 'gallery') drawGallery();
     else if (state.screen === 'game') drawGame();
     else if (state.screen === 'result') drawResult();
     else drawMenu();
+  }
+
+  function drawPreload() {
+    const l = state.layout;
+    const p = preloadProgress();
+    const timeRatio = clamp(state.preloadElapsed / Math.max(0.1, state.preloadMin), 0, 1);
+    const ratio = clamp(Math.max(p.ratio * 0.92, timeRatio * 0.28), 0, 1);
+
+    ctx.save();
+    const wall = getAssetImage(ROOM_ASSETS.wall);
+    if (wall) {
+      ctx.globalAlpha = 0.38;
+      drawCoverImage(wall, 0, 0, l.w, l.h);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = '#eee7dc';
+      ctx.fillRect(0, 0, l.w, l.h);
+    }
+
+    // 加载页只放鬼火，不放门，避免和主页混淆。
+    const firePositions = [
+      [0.24, 0.26, 0.12],
+      [0.76, 0.28, 0.10],
+      [0.20, 0.72, 0.11],
+      [0.82, 0.68, 0.13],
+      [0.50, 0.76, 0.09]
+    ];
+    firePositions.forEach((fp, i) => {
+      const img = getAssetImage(GHOST_FIRE_FILES[i % GHOST_FIRE_FILES.length]);
+      const x = fp[0] * l.w + Math.sin(state.t * (0.8 + i * 0.08) + i) * 13;
+      const y = fp[1] * l.h + Math.cos(state.t * (1.0 + i * 0.07) + i * 1.5) * 15;
+      const size = Math.max(34, Math.min(70, l.w * fp[2]));
+      ctx.globalAlpha = 0.42 + Math.sin(state.t * 2 + i) * 0.08;
+      if (img) ctx.drawImage(img, x - size / 2, y - size * 0.65, size, size * 1.28);
+      else drawCodeGhostFire(x, y, size, 0.8);
+    });
+
+    ctx.globalAlpha = 1;
+    const panelW = Math.min(330, l.w * 0.78);
+    const panelH = 176;
+    const panelX = (l.w - panelW) / 2;
+    const panelY = l.h * 0.36;
+
+    ctx.fillStyle = 'rgba(255,253,246,0.96)';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 5;
+    roundRect(panelX, panelY, panelW, panelH, 24, true, true, 5);
+
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 28px system-ui, -apple-system, sans-serif';
+    ctx.fillText(ui('正在点香……', 'Lighting incense...'), l.w / 2, panelY + 46);
+
+    ctx.font = '700 13px system-ui, -apple-system, sans-serif';
+    const countText = p.total ? `${p.loaded}/${p.total}` : '';
+    ctx.fillText(ui(`准备长廊素材 ${countText}`, `Preparing assets ${countText}`), l.w / 2, panelY + 78);
+
+    const barX = panelX + 34;
+    const barY = panelY + 108;
+    const barW = panelW - 68;
+    const barH = 18;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    roundRect(barX, barY, barW, barH, 9, true, true, 3);
+
+    ctx.fillStyle = '#111';
+    roundRect(barX + 4, barY + 4, Math.max(0, (barW - 8) * ratio), barH - 8, 6, true, false, 0);
+
+    ctx.font = '800 12px system-ui, -apple-system, sans-serif';
+    ctx.fillText(`${Math.round(ratio * 100)}%`, l.w / 2, panelY + 148);
+
+    ctx.restore();
   }
 
   function drawMenu() {
