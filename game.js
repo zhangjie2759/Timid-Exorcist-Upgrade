@@ -1,13 +1,13 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.8_card_clip';
+  const VERSION = 'v0.12.9_fast_load';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
   const DPR_MAX = 2;
   const STORAGE_KEY = 'next_room_corridor_v0121_save';
-  const ASSET_BASES = ['images/', '', 'assets/'];
+  const ASSET_BASES = ['images/'];
 
   const ROOM_ASSETS = {
     wall: 'room/墙.png',
@@ -61,7 +61,7 @@
   ];
 
   const state = {
-    screen: 'preload',
+    screen: 'menu',
     lang: 'zh',
     difficulty: 'normal',
     room: 1,
@@ -85,7 +85,10 @@
     toast: null,
     preloadElapsed: 0,
     preloadMin: 0.8,
-    preloadMax: 5.0,
+    preloadMax: 3.0,
+    loadingFiles: [],
+    loadingDifficulty: 'normal',
+    backgroundPreloadStarted: false,
     resultReason: '',
     galleryTab: 'ghosts',
     galleryScroll: 0,
@@ -178,7 +181,7 @@
     return null;
   }
 
-  function preloadFilesList() {
+  function fullAssetFilesList() {
     return Array.from(new Set([
       ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.seal,
       ...GHOST_FIRE_FILES,
@@ -187,19 +190,63 @@
     ]));
   }
 
-  function preloadAll() {
-    preloadFilesList().forEach(loadImageWithFallback);
+  function firstGamePreloadFiles() {
+    return Array.from(new Set([
+      ROOM_ASSETS.wall,
+      ROOM_ASSETS.room,
+      ROOM_ASSETS.door,
+      ROOM_ASSETS.frame,
+      ROOM_ASSETS.seal,
+      ...GHOST_FIRE_FILES.slice(0, 2),
+      ...GHOSTS.slice(0, 4).map(g => g.file),
+      ...PEOPLE.slice(0, 4).map(p => p.file)
+    ]));
   }
 
-  function preloadProgress() {
-    const files = preloadFilesList();
-    if (!files.length) return { ratio: 1, loaded: 0, total: 0 };
+  function preloadFiles(files) {
+    Array.from(new Set(files || [])).forEach(loadImageWithFallback);
+  }
+
+  function preloadAll() {
+    // 保留函数名兼容旧逻辑，但不再一进网页就加载全部素材。
+    preloadFiles(firstGamePreloadFiles());
+  }
+
+  function preloadProgress(files = state.loadingFiles) {
+    const list = Array.from(new Set((files && files.length ? files : firstGamePreloadFiles()).filter(Boolean)));
+    if (!list.length) return { ratio: 1, loaded: 0, total: 0 };
     let loaded = 0;
-    files.forEach(file => {
+    list.forEach(file => {
       const img = getAssetImage(file);
       if (img && img.complete && img.naturalWidth) loaded += 1;
     });
-    return { ratio: loaded / files.length, loaded, total: files.length };
+    return { ratio: loaded / list.length, loaded, total: list.length };
+  }
+
+  function beginGameLoading(difficulty) {
+    state.loadingDifficulty = difficulty || 'normal';
+    state.loadingFiles = firstGamePreloadFiles();
+    state.preloadElapsed = 0;
+    state.screen = 'gameLoading';
+    preloadFiles(state.loadingFiles);
+  }
+
+  function preloadBackgroundAssets() {
+    if (state.backgroundPreloadStarted) return;
+    state.backgroundPreloadStarted = true;
+    const first = new Set(firstGamePreloadFiles());
+    const rest = fullAssetFilesList().filter(file => !first.has(file));
+    // 分帧/分批加载剩余素材，避免进入游戏瞬间再次卡顿。
+    let i = 0;
+    const step = () => {
+      const batch = rest.slice(i, i + 3);
+      preloadFiles(batch);
+      i += batch.length;
+      if (i < rest.length) {
+        setTimeout(step, 180);
+      }
+    };
+    setTimeout(step, 500);
   }
 
   function resize() {
@@ -241,7 +288,7 @@
 
   window.addEventListener('resize', resize);
   resize();
-  preloadAll();
+  preloadFiles(GHOST_FIRE_FILES.slice(0, 2));
 
   function bossStageForRoom(room) { return Math.floor((room - 1) / 25) + 1; }
   function bossWindow(room) {
@@ -299,7 +346,8 @@
       return { type: 'ghost', ghosts, requiredSeals: ghosts.length, sealed: 0, talismans: [], seen: false, passTimer: 0 };
     }
     if (r < ghostChance + animalChance) {
-      return { type: 'person', person: randItem(PEOPLE), talismans: [], seen: false, passTimer: 0 };
+      const animalPool = room < 8 ? PEOPLE.slice(0, 4) : PEOPLE;
+      return { type: 'person', person: randItem(animalPool), talismans: [], seen: false, passTimer: 0 };
     }
     return { type: 'empty', talismans: [], seen: false, passTimer: 0 };
   }
@@ -478,12 +526,13 @@
   function update(dt) {
     state.t += dt;
 
-    if (state.screen === 'preload') {
+    if (state.screen === 'gameLoading') {
       state.preloadElapsed += dt;
-      const p = preloadProgress();
-      const ready = p.ratio >= 0.98 || state.preloadElapsed >= state.preloadMax;
-      if (state.preloadElapsed >= state.preloadMin && ready) {
-        state.screen = 'menu';
+      const p = preloadProgress(state.loadingFiles);
+      const ready = p.ratio >= 0.92 || state.preloadElapsed >= state.preloadMax;
+      if (state.preloadElapsed >= 0.45 && ready) {
+        startRun(state.loadingDifficulty || 'normal');
+        preloadBackgroundAssets();
       }
       return;
     }
@@ -589,6 +638,7 @@
       setPressed('galleryTop');
       state.lastScreen = 'game';
       state.screen = 'gallery';
+      preloadBackgroundAssets();
       state.draggingDoor = false;
       return;
     }
@@ -691,7 +741,7 @@
     }
     if (hit(p, inflate(b.start, 10))) {
       setPressed('start');
-      startRun('normal');
+      beginGameLoading('normal');
     } else if (hit(p, inflate(b.rules, 10))) {
       setPressed('rules');
       state.screen = 'rules';
@@ -699,6 +749,7 @@
       setPressed('gallery');
       state.lastScreen = 'menu';
       state.screen = 'gallery';
+      preloadBackgroundAssets();
     }
   }
 
@@ -776,7 +827,7 @@
 
   function draw() {
     clear();
-    if (state.screen === 'preload') drawPreload();
+    if (state.screen === 'gameLoading') drawPreload();
     else if (state.screen === 'menu') drawMenu();
     else if (state.screen === 'rules') drawRules();
     else if (state.screen === 'gallery') drawGallery();
@@ -787,7 +838,7 @@
 
   function drawPreload() {
     const l = state.layout;
-    const p = preloadProgress();
+    const p = preloadProgress(state.loadingFiles);
     const timeRatio = clamp(state.preloadElapsed / Math.max(0.1, state.preloadMin), 0, 1);
     const ratio = clamp(Math.max(p.ratio * 0.92, timeRatio * 0.28), 0, 1);
 
@@ -804,7 +855,7 @@
       [0.50, 0.76, 0.09]
     ];
     firePositions.forEach((fp, i) => {
-      const img = getAssetImage(GHOST_FIRE_FILES[i % GHOST_FIRE_FILES.length]);
+      const img = getAssetImage(GHOST_FIRE_FILES[i % 2]);
       const x = fp[0] * l.w + Math.sin(state.t * (0.8 + i * 0.08) + i) * 13;
       const y = fp[1] * l.h + Math.cos(state.t * (1.0 + i * 0.07) + i * 1.5) * 15;
       const size = Math.max(34, Math.min(70, l.w * fp[2]));
@@ -828,11 +879,11 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 28px system-ui, -apple-system, sans-serif';
-    ctx.fillText(ui('正在点香……', 'Lighting incense...'), l.w / 2, panelY + 46);
+    ctx.fillText(ui('正在开门……', 'Opening doors...'), l.w / 2, panelY + 46);
 
     ctx.font = '700 13px system-ui, -apple-system, sans-serif';
     const countText = p.total ? `${p.loaded}/${p.total}` : '';
-    ctx.fillText(ui(`准备长廊素材 ${countText}`, `Preparing assets ${countText}`), l.w / 2, panelY + 78);
+    ctx.fillText(ui(`准备第一段长廊 ${countText}`, `Preparing first corridor ${countText}`), l.w / 2, panelY + 78);
 
     const barX = panelX + 34;
     const barY = panelY + 108;
@@ -915,7 +966,7 @@
 
     ctx.save();
     positions.forEach((p, i) => {
-      const img = getAssetImage(GHOST_FIRE_FILES[i % GHOST_FIRE_FILES.length]);
+      const img = getAssetImage(GHOST_FIRE_FILES[i % 2]);
       const x = p[0] * l.w + Math.sin(state.t * (0.9 + i * 0.07) + i) * 12;
       const y = p[1] * l.h + Math.cos(state.t * (1.1 + i * 0.09) + i * 1.7) * 14;
       const size = Math.max(28, Math.min(64, l.w * p[2]));
