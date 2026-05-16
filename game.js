@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.1_ui_owl';
+  const VERSION = 'v0.13.2_zhuyin_foresight';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -22,13 +22,13 @@
     { name: '赤鱬', nameEn: 'Chiru', file: '鬼/赤鱬.png', type: 'thin', speed: 2.08, fire: 2, desc: '细长灵活，动作很快，最擅长突然贴近。', descEn: 'Slim, agile, and fast. It is good at suddenly closing the distance.' },
     { name: '当康', nameEn: 'Dangkang', file: '鬼/康当.png', type: 'heavy', speed: 1.05, fire: 2, desc: '体型敦实，压迫感强，逼近时像重物挪动。', descEn: 'Heavy and solid. Its approach feels like something massive shifting forward.' },
     { name: '混沌', nameEn: 'Hundun', file: '鬼/混沌.png', type: 'heavy', speed: 0.72, fire: 3, desc: '轮廓混乱，越盯着看越分不清它的形状。', descEn: 'A chaotic silhouette. The longer you stare, the harder it is to read.' },
-    { name: '九尾狐', nameEn: 'Nine-tailed Fox', file: '鬼/九尾狐.png', type: 'normal', speed: 1.76, fire: 2, ghostEye: true, desc: '擅长迷惑视线，被封印后会短暂开启鬼眼。', descEn: 'A master of deception. Sealing it briefly activates Ghost Eye.' },
+    { name: '九尾狐', nameEn: 'Nine-tailed Fox', file: '鬼/九尾狐.png', type: 'normal', speed: 1.76, fire: 2, ghostEye: true, desc: '擅长迷惑视线。封印后会短暂开启鬼眼，看清当前门后的异常。', descEn: 'A master of deception. Sealing it briefly activates Ghost Eye, revealing the current door.' },
     { name: '夔牛', nameEn: 'Kui Ox', file: '鬼/夔牛.png', type: 'heavy', speed: 1.18, fire: 2, desc: '独脚震地，虽然不快，但每次靠近都很有压迫。', descEn: 'Not the fastest, but every step feels heavy and oppressive.' },
     { name: '麒麟', nameEn: 'Qilin', file: '鬼/麒麟.png', type: 'normal', speed: 1.42, fire: 2, desc: '外表庄重，但在门后出现时往往并不吉利。', descEn: 'It looks solemn, but seeing it behind the door is never a good sign.' },
     { name: '穷奇', nameEn: 'Qiongqi', file: '鬼/穷奇.png', type: 'thin', speed: 2.22, fire: 3, desc: '凶性外露，判断失误时最容易被它扑出门。', descEn: 'Ferocious and direct. One bad read can let it burst out.' },
     { name: '饕餮', nameEn: 'Taotie', file: '鬼/饕餮.png', type: 'heavy', speed: 1.32, fire: 3, desc: '贪婪巨口，虽然笨重，但存在感异常强烈。', descEn: 'A greedy maw. Slow and heavy, but impossible to ignore.' },
     { name: '狰', nameEn: 'Zheng', file: '鬼/狰.png', type: 'normal', speed: 1.70, fire: 3, desc: '神情凶狠，常常伴着成群鬼火一起出现。', descEn: 'A fierce presence, often surrounded by ghost fire.' },
-    { name: '烛阴', nameEn: 'Zhuyin', file: '鬼/烛阴.png', type: 'thin', speed: 2.45, fire: 3, desc: '危险等级极高，速度极快，几乎不给人反应时间。', descEn: 'Extremely dangerous and very fast. It gives you almost no time to react.' }
+    { name: '烛阴', nameEn: 'Zhuyin', file: '鬼/烛阴.png', type: 'thin', speed: 2.45, fire: 3, foresight: true, bossLike: true, rareNormal: true, desc: '极少现身的强大妖怪，更接近Boss。封印后会发动「烛照未来」，短暂照见后面几扇门。', descEn: 'A rare, boss-like spirit. Sealing it triggers Foresight, briefly revealing several future doors.' }
   ];
 
   const PEOPLE = [
@@ -165,6 +165,9 @@
     eyeFx: 0,
     sealFlash: 0,
     bossDefeated: {},
+    futureQueue: [],
+    foresight: { active: false, index: 0, timer: 0, count: 5, perDoorTime: 0.42, used: 0, maxPerRun: 2, returnTo: 'game' },
+    pendingEvolutionAfterForesight: false,
     evolution: emptyEvolutionState(),
     evolutionOptions: [],
     evolutionHistory: [],
@@ -341,6 +344,25 @@
     return BOSS_CONFIGS[Math.min(stage, BOSS_CONFIGS.length) - 1] || { stage, time: 5.5, seals: 30 };
   }
   function bossGhostForStage(stage) { return GHOSTS[(stage * 2 + 6) % GHOSTS.length]; }
+  function ghostByName(name) {
+    return GHOSTS.find(g => g.name === name) || GHOSTS[0];
+  }
+
+  function zhuyinGhost() {
+    return ghostByName('烛阴');
+  }
+
+  function isZhuyin(def) {
+    return !!def && def.name === '烛阴';
+  }
+
+  function zhuyinRareChance(room) {
+    // 烛阴一般作为 Boss 存在。普通门里只保留极低概率，让它成为“中了大奖”的特殊事件。
+    if (room < 35) return 0;
+    if (bossWindow(room).active) return 0;
+    return clamp(0.006 + room * 0.000035, 0.006, 0.014);
+  }
+
   function currentStageProgress(room = state.room) {
     const stage = bossStageForRoom(room);
     const index = ((room - 1) % 25) + 1;
@@ -497,13 +519,14 @@
 
   function pickGhosts(count, room) {
     const unlockCount = clamp(4 + Math.floor(room / 8), 4, GHOSTS.length);
-    const pool = GHOSTS.slice(0, unlockCount);
+    // 烛阴不进入普通鬼池；它是 Boss 级妖怪，只会在 Boss 或极低概率特殊门中出现。
+    const pool = GHOSTS.slice(0, unlockCount).filter(g => g.name !== '烛阴');
     const picked = [];
-    while (picked.length < count) {
+    while (picked.length < count && pool.length) {
       const g = randItem(pool);
       if (!picked.includes(g)) picked.push(g);
     }
-    return picked;
+    return picked.length ? picked : [GHOSTS[0]];
   }
 
   function makeContent(room) {
@@ -514,6 +537,12 @@
         const bossGhost = bossGhostForStage(win.stage);
         return { type: 'boss', stage: win.stage, bossGhost, cfg: bossConfig(win.stage), bossSeen: false, hits: 0, talismans: [], forced: win.forced, seen: false, passTimer: 0 };
       }
+    }
+
+    // 极低概率：烛阴以 Boss 级特殊门出现。封印成功必定触发「烛照未来」。
+    if (Math.random() < zhuyinRareChance(room)) {
+      const z = zhuyinGhost();
+      return { type: 'ghost', ghosts: [z], requiredSeals: 1, sealed: 0, talismans: [], seen: false, passTimer: 0, rareZhuyin: true };
     }
 
     const r = Math.random();
@@ -530,6 +559,72 @@
     return { type: 'empty', talismans: [], seen: false, passTimer: 0 };
   }
 
+
+  function takeContentForRoom(room) {
+    if (state.futureQueue && state.futureQueue.length && state.futureQueue[0].room === room) {
+      return state.futureQueue.shift().content;
+    }
+    return makeContent(room);
+  }
+
+  function canTriggerForesight() {
+    return state.foresight && state.foresight.used < state.foresight.maxPerRun;
+  }
+
+  function startForesightPreview(startRoom, returnTo = 'game') {
+    if (!canTriggerForesight()) return false;
+
+    state.foresight.active = true;
+    state.foresight.index = 0;
+    state.foresight.timer = 0;
+    state.foresight.used += 1;
+    state.foresight.returnTo = returnTo;
+
+    const count = state.foresight.count || 5;
+    state.futureQueue = [];
+    for (let i = 0; i < count; i++) {
+      const room = startRoom + i;
+      state.futureQueue.push({ room, content: makeContent(room) });
+    }
+
+    state.screen = 'foresight';
+    state.draggingDoor = false;
+    state.snapTarget = null;
+    setToast(null);
+    return true;
+  }
+
+  function triggerZhuyinForesightIfPossible(startRoom, returnTo = 'game') {
+    if (!canTriggerForesight()) return false;
+    return startForesightPreview(startRoom, returnTo);
+  }
+
+  function finishForesightPreview() {
+    state.foresight.active = false;
+    state.foresight.index = 0;
+    state.foresight.timer = 0;
+
+    if (state.foresight.returnTo === 'evolution') {
+      state.pendingEvolutionAfterForesight = false;
+      state.screen = 'evolution';
+      return;
+    }
+
+    state.screen = 'game';
+    setToast(ui('烛照结束，记住你看到的门', 'Foresight ended. Remember the doors.'), 1.5);
+  }
+
+  function updateForesight(dt) {
+    state.foresight.timer += dt;
+    if (state.foresight.timer >= state.foresight.perDoorTime) {
+      state.foresight.timer = 0;
+      state.foresight.index += 1;
+      if (state.foresight.index >= state.futureQueue.length) {
+        finishForesightPreview();
+      }
+    }
+  }
+
   function createContent() {
     state.mode = 'normal';
     state.door = 0;
@@ -538,7 +633,7 @@
     state.danger = 0;
     state.transition = 0;
     state.corridorOffset = 0;
-    state.content = makeContent(state.room);
+    state.content = takeContentForRoom(state.room);
   }
 
   function startRun(difficulty) {
@@ -551,6 +646,9 @@
     state.ghostEye = 0;
     state.eyeFx = 0;
     state.bossDefeated = {};
+    state.futureQueue = [];
+    state.foresight = { active: false, index: 0, timer: 0, count: 5, perDoorTime: 0.42, used: 0, maxPerRun: 2, returnTo: 'game' };
+    state.pendingEvolutionAfterForesight = false;
     state.evolution = emptyEvolutionState();
     state.evolutionOptions = [];
     state.evolutionHistory = [];
@@ -578,7 +676,7 @@
     state.transitionStartDoor = state.door;
     state.corridorOffset = 0;
     state.pendingNextRoom = toRoom;
-    state.nextContent = makeContent(toRoom);
+    state.nextContent = takeContentForRoom(toRoom);
     state.danger = 0;
     state.draggingDoor = false;
     state.snapTarget = null;
@@ -673,6 +771,7 @@
     state.sealFlash = 0.01;
 
     if (c.sealed >= c.requiredSeals) {
+      const hasZhuyin = c.ghosts.some(isZhuyin);
       c.ghosts.forEach(g => {
         if (g.ghostEye) {
           state.ghostEye = 10;
@@ -680,8 +779,14 @@
           setToast('鬼眼开启：10秒透视', 1.6);
         }
       });
+
       state.mode = 'sealSuccess';
       state.pendingNextRoom = state.room + 1;
+
+      // 烛阴极少出现在普通门中；一旦封印，必定发动「烛照未来」。
+      if (hasZhuyin) {
+        triggerZhuyinForesightIfPossible(state.pendingNextRoom, 'game');
+      }
     } else {
       setToast('符咒贴上去了');
     }
@@ -700,7 +805,13 @@
       state.evolutionOptions = generateEvolutionOptions(c.stage);
       state.mode = 'normal';
       state.door = 0;
-      state.screen = 'evolution';
+
+      // 如果本次 Boss 是烛阴，先触发「烛照未来」，看完后再进入妖怪进化选择。
+      if (isZhuyin(c.bossGhost) && triggerZhuyinForesightIfPossible(state.pendingNextRoom, 'evolution')) {
+        state.pendingEvolutionAfterForesight = true;
+      } else {
+        state.screen = 'evolution';
+      }
       setToast(null);
     }
   }
@@ -719,6 +830,11 @@
       if (state.preloadElapsed >= state.preloadMin && ready) {
         state.screen = 'menu';
       }
+      return;
+    }
+
+    if (state.screen === 'foresight') {
+      updateForesight(dt);
       return;
     }
 
@@ -1070,6 +1186,7 @@
     else if (state.screen === 'rules') drawRules();
     else if (state.screen === 'gallery') drawGallery();
     else if (state.screen === 'evolution') drawEvolution();
+    else if (state.screen === 'foresight') drawForesight();
     else if (state.screen === 'game') drawGame();
     else if (state.screen === 'result') drawResult();
     else drawMenu();
@@ -1213,6 +1330,70 @@
       if (img) ctx.drawImage(img, x - size / 2, y - size * 0.65, size, size * 1.28);
       else drawCodeGhostFire(x, y, size, 0.8);
     });
+    ctx.restore();
+  }
+
+
+  function drawForesight() {
+    const l = state.layout;
+    const item = state.futureQueue[state.foresight.index];
+    const content = item ? item.content : null;
+    const roomNo = item ? item.room : state.room + state.foresight.index + 1;
+    const progress = clamp(state.foresight.timer / Math.max(0.1, state.foresight.perDoorTime), 0, 1);
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, l.w, l.h);
+
+    // 轻微白闪/灵魂出窍感。
+    ctx.globalAlpha = 0.12 + Math.sin(state.t * 18) * 0.035;
+    ctx.fillStyle = '#fff6d8';
+    ctx.fillRect(0, 0, l.w, l.h);
+    ctx.globalAlpha = 1;
+
+    ctx.beginPath();
+    ctx.rect(0, l.topH, l.w, l.h - l.topH);
+    ctx.clip();
+
+    // 未来预览：直接展示门后的内容，不画门板，玩家需要靠记忆。
+    drawForesightCard(content);
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 4;
+    roundRect(l.w * 0.07, 18, l.w * 0.86, 76, 20, true, true, 4);
+
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 23px system-ui, sans-serif';
+    ctx.fillText(ui('烛照未来', 'Foresight'), l.w / 2, 43);
+    ctx.font = '800 12px system-ui, sans-serif';
+    ctx.fillText(ui(`记住第 ${roomNo} 门 · ${state.foresight.index + 1}/${state.futureQueue.length}`, `Remember Door ${roomNo} · ${state.foresight.index + 1}/${state.futureQueue.length}`), l.w / 2, 70);
+
+    const barW = l.w * 0.56;
+    const barX = (l.w - barW) / 2;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    roundRect(barX, 104, barW, 8, 4, true, true, 2);
+    ctx.fillStyle = '#111';
+    roundRect(barX + 2, 106, Math.max(0, (barW - 4) * progress), 4, 2, true, false, 0);
+    ctx.restore();
+  }
+
+  function drawForesightCard(content) {
+    const l = state.layout;
+    ctx.save();
+    drawWallBackground();
+    drawRoomBack(l.hole);
+    drawContentFor(content, l.door, l.hole);
+    drawWallMask();
+    drawDoorFrame(l.hole);
+    drawBossGlow(content, l.hole);
+    // 不画门板：这就是“照见门后”的核心表现。
     ctx.restore();
   }
 
@@ -1821,7 +2002,8 @@
       '6. Sealing the Nine-tailed Fox opens Ghost Eye for 10 seconds.',
       '7. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
       '8. After each Boss, choose one mutation to seal. The other one takes effect.',
-      '9. The Archive records ghosts and animals you have seen.'
+      '9. Zhuyin is a rare boss-like spirit. Sealing it briefly reveals future doors.',
+      '10. The Archive records ghosts and animals you have seen.'
     ] : [
       '1. 拖动红木滑门向左开门，松手后会自动吸附开/关。',
       '2. 判断成功后，当前门位会横向滑走，新的门从长廊另一侧滑入。',
@@ -1831,7 +2013,8 @@
       '6. 封印九尾狐后开启10秒鬼眼，门会变透明。',
       '7. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
       '8. 每次打败Boss后会出现妖怪进化二选一：你封印其中一个，另一个会生效。',
-      '9. 图鉴会记录见过的鬼和小动物，可以上下滑动查看。'
+      '9. 烛阴是极少现身的Boss级妖怪，封印后会短暂照见未来几扇门。',
+      '10. 图鉴会记录见过的鬼和小动物，可以上下滑动查看。'
     ];
   }
 
