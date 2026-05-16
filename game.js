@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.2_zhuyin_foresight';
+  const VERSION = 'v0.13.3_longpress_test';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -172,6 +172,9 @@
     evolutionOptions: [],
     evolutionHistory: [],
     lastEvolution: null,
+    testMode: false,
+    testZhuyinUsed: false,
+    menuHold: null,
     toast: null,
     preloadElapsed: 0,
     preloadMin: 0.8,
@@ -539,6 +542,13 @@
       }
     }
 
+    // 测试模式：第一扇非Boss普通门强制出现烛阴，方便测试「烛照未来」。
+    if (state.testMode && !state.testZhuyinUsed) {
+      state.testZhuyinUsed = true;
+      const z = zhuyinGhost();
+      return { type: 'ghost', ghosts: [z], requiredSeals: 1, sealed: 0, talismans: [], seen: false, passTimer: 0, rareZhuyin: true, debugForced: true };
+    }
+
     // 极低概率：烛阴以 Boss 级特殊门出现。封印成功必定触发「烛照未来」。
     if (Math.random() < zhuyinRareChance(room)) {
       const z = zhuyinGhost();
@@ -636,9 +646,12 @@
     state.content = takeContentForRoom(state.room);
   }
 
-  function startRun(difficulty) {
+  function startRun(difficulty, testMode = false) {
     state.screen = 'game';
     state.difficulty = difficulty;
+    state.testMode = !!testMode;
+    state.testZhuyinUsed = false;
+    state.menuHold = null;
     state.room = 1;
     state.mode = 'normal';
     state.door = 0;
@@ -647,7 +660,7 @@
     state.eyeFx = 0;
     state.bossDefeated = {};
     state.futureQueue = [];
-    state.foresight = { active: false, index: 0, timer: 0, count: 5, perDoorTime: 0.42, used: 0, maxPerRun: 2, returnTo: 'game' };
+    state.foresight = { active: false, index: 0, timer: 0, count: 5, perDoorTime: testMode ? 0.55 : 0.42, used: 0, maxPerRun: testMode ? 99 : 2, returnTo: 'game' };
     state.pendingEvolutionAfterForesight = false;
     state.evolution = emptyEvolutionState();
     state.evolutionOptions = [];
@@ -656,6 +669,9 @@
     state.toast = null;
     state.resultReason = '';
     createContent();
+    if (state.testMode) {
+      setToast(ui('测试模式：第一扇普通门强制烛阴', 'Test mode: first normal door forces Zhuyin'), 2.2);
+    }
   }
 
   function markSeenContent() {
@@ -822,6 +838,16 @@
 
   function update(dt) {
     state.t += dt;
+
+    if (state.screen === 'menu' && state.menuHold && state.menuHold.active && state.pointer.down) {
+      state.menuHold.time += dt;
+      if (!state.menuHold.triggered && state.menuHold.time >= 1.15) {
+        state.menuHold.triggered = true;
+        setPressed(null);
+        startRun('normal', true);
+        return;
+      }
+    }
 
     if (state.screen === 'preload') {
       state.preloadElapsed += dt;
@@ -996,6 +1022,19 @@
 
   function onPointerUp(e) {
     const p = getPointer(e);
+
+    if (state.screen === 'menu' && state.menuHold && state.menuHold.active) {
+      const b = menuButtons();
+      const shouldStart = !state.menuHold.triggered && hit(p, inflate(b.start, 10));
+      state.menuHold = null;
+      state.pointer = { x: p.x, y: p.y, down: false };
+      state.pressed = null;
+      if (shouldStart) {
+        startRun('normal', false);
+      }
+      return;
+    }
+
     state.pointer = { x: p.x, y: p.y, down: false };
     state.pressed = null;
     if (state.rulesDragging) state.rulesDragging = false;
@@ -1036,14 +1075,16 @@
 
   function handleMenuDown(p) {
     const b = menuButtons();
+    state.menuHold = null;
     if (hit(p, inflate(b.lang, 8))) {
       setPressed('lang');
       state.lang = state.lang === 'zh' ? 'en' : 'zh';
       return;
     }
     if (hit(p, inflate(b.start, 10))) {
+      // 短按：正常开始；长按约1.15秒：进入烛阴测试模式。
       setPressed('start');
-      startRun('normal');
+      state.menuHold = { active: true, time: 0, triggered: false };
     } else if (hit(p, inflate(b.rules, 10))) {
       setPressed('rules');
       state.screen = 'rules';
@@ -1294,6 +1335,25 @@
     drawUIButton(b.start, isEn() ? 'Start' : '开始游戏', '', 'start');
     drawUIButton(b.rules, isEn() ? 'Rules' : '游戏规则', '', 'rules');
     drawUIButton(b.gallery, isEn() ? `Archive ${collectCountText()}` : `图鉴 ${collectCountText()}`, '', 'gallery');
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,0.52)';
+    ctx.font = '800 11px system-ui, sans-serif';
+    ctx.fillText(ui('长按开始游戏：烛阴测试模式', 'Hold Start: Zhuyin test mode'), l.w / 2, b.gallery.y + b.gallery.h + 28);
+
+    if (state.menuHold && state.menuHold.active && isPressed('start')) {
+      const ratio = clamp(state.menuHold.time / 1.15, 0, 1);
+      const barW = b.start.w - 30;
+      const barX = b.start.x + 15;
+      const barY = b.start.y + b.start.h - 9;
+      ctx.fillStyle = 'rgba(0,0,0,0.16)';
+      roundRect(barX, barY, barW, 5, 3, true, false, 0);
+      ctx.fillStyle = '#111';
+      roundRect(barX, barY, barW * ratio, 5, 3, true, false, 0);
+    }
+    ctx.restore();
   }
 
   function drawMenuBackground() {
