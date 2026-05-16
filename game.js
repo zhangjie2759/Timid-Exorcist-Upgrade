@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.6_ui_talisman';
+  const VERSION = 'v0.13.7_audio_system';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -19,6 +19,12 @@
   };
 
   const BGM_FILE = 'audio/bgm.wav';
+  const AUDIO_FILES = {
+    bgm: ['audio/bgm.wav'],
+    boss: ['audio/bossbgm.wav', 'audio/boss bgm.wav'],
+    slide: ['audio/slide door.wav', 'audio/slide_door.wav', 'audio/slidedoor.wav'],
+    open: ['audio/opendoor.wav', 'audio/open door.wav']
+  };
 
   const GHOSTS = [
     { name: '猼訑', nameEn: 'Botuo', file: '鬼/猼訑.png', type: 'normal', speed: 1.28, fire: 2, desc: '警觉又狡猾，喜欢躲在门后观察人。', descEn: 'Alert and cunning. It likes watching people from behind the door.' },
@@ -180,6 +186,19 @@
     menuHold: null,
     musicOn: false,
     bgm: null,
+    bossBgm: null,
+    slideSfx: null,
+    openSfx: null,
+    audioCtx: null,
+    audio: {
+      currentMusic: 'normal',
+      normalTarget: 0,
+      bossTarget: 0,
+      slideTarget: 0,
+      doorWasMoving: false,
+      lastDoor: 0,
+      ghostCooldown: 0
+    },
     toast: null,
     preloadElapsed: 0,
     preloadMin: 0.8,
@@ -677,6 +696,9 @@
     state.testMode = !!testMode;
     state.testZhuyinUsed = false;
     state.menuHold = null;
+    state.audio.doorWasMoving = false;
+    state.audio.lastDoor = 0;
+    state.audio.ghostCooldown = 0;
     state.room = 1;
     state.mode = 'normal';
     state.door = 0;
@@ -711,38 +733,231 @@
 
   function setToast(text, time = 1.4) { state.toast = text ? { text, time } : null; }
 
+  function firstAudioCandidate(kind) {
+    const list = AUDIO_FILES[kind] || [];
+    return list.length ? list[0] : '';
+  }
+
+  function makeAudio(candidates, loop = false, volume = 1) {
+    const audio = new Audio();
+    audio.loop = loop;
+    audio.preload = 'auto';
+    audio.volume = 0;
+    audio._baseVolume = volume;
+    audio._targetVolume = 0;
+    audio._srcList = (candidates || []).slice();
+    audio._srcIndex = 0;
+
+    const trySrc = () => {
+      if (audio._srcIndex >= audio._srcList.length) return;
+      audio.src = audio._srcList[audio._srcIndex++];
+      try { audio.load(); } catch (e) {}
+    };
+
+    audio.onerror = () => {
+      if (audio._srcIndex < audio._srcList.length) trySrc();
+    };
+
+    trySrc();
+    return audio;
+  }
+
   function ensureBgm() {
-    if (state.bgm) return state.bgm;
+    if (!state.bgm) state.bgm = makeAudio(AUDIO_FILES.bgm, true, 0.34);
+    return state.bgm;
+  }
+
+  function ensureBossBgm() {
+    if (!state.bossBgm) state.bossBgm = makeAudio(AUDIO_FILES.boss, true, 0.48);
+    return state.bossBgm;
+  }
+
+  function ensureSlideSfx() {
+    if (!state.slideSfx) state.slideSfx = makeAudio(AUDIO_FILES.slide, true, 0.44);
+    return state.slideSfx;
+  }
+
+  function ensureOpenSfx() {
+    if (!state.openSfx) state.openSfx = makeAudio(AUDIO_FILES.open, false, 0.62);
+    return state.openSfx;
+  }
+
+  function ensureAudioContext() {
+    if (state.audioCtx) return state.audioCtx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
     try {
-      const audio = new Audio(BGM_FILE);
-      audio.loop = true;
-      audio.volume = 0.34;
-      audio.preload = 'auto';
-      state.bgm = audio;
-      return audio;
+      state.audioCtx = new AC();
+      return state.audioCtx;
     } catch (e) {
       return null;
     }
   }
 
-  function toggleMusic() {
-    const audio = ensureBgm();
-    if (!audio) {
-      setToast(ui('音乐加载失败', 'Music failed to load'), 1.2);
-      return;
+  function safePlay(audio) {
+    if (!audio) return;
+    try {
+      const p = audio.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
+  }
+
+  function fadeAudio(audio, target, dt, speed = 1.8) {
+    if (!audio) return;
+    const base = audio._baseVolume || 1;
+    const targetVol = clamp(target * base, 0, base);
+    const current = Number.isFinite(audio.volume) ? audio.volume : 0;
+    const step = speed * dt;
+    const next = current + clamp(targetVol - current, -step, step);
+    audio.volume = clamp(next, 0, base);
+
+    if (target > 0.001 && audio.paused) safePlay(audio);
+    if (target <= 0.001 && audio.volume <= 0.01 && !audio.paused) {
+      try { audio.pause(); } catch (e) {}
     }
-    state.musicOn = !state.musicOn;
-    if (state.musicOn) {
-      audio.play().then(() => {
-        setToast(ui('音乐已开启', 'Music on'), 1.0);
-      }).catch(() => {
-        state.musicOn = false;
-        setToast(ui('再点一次音乐按钮', 'Tap music again'), 1.2);
-      });
+  }
+
+  function desiredMusicKind() {
+    return state.screen === 'game' && state.mode === 'bossFight' ? 'boss' : 'normal';
+  }
+
+  function updateMusicFade(dt) {
+    if (!state.musicOn) {
+      state.audio.normalTarget = 0;
+      state.audio.bossTarget = 0;
     } else {
-      audio.pause();
+      const kind = desiredMusicKind();
+      state.audio.currentMusic = kind;
+      state.audio.normalTarget = kind === 'normal' ? 1 : 0;
+      state.audio.bossTarget = kind === 'boss' ? 1 : 0;
+    }
+
+    fadeAudio(ensureBgm(), state.audio.normalTarget, dt, 0.72);
+    fadeAudio(ensureBossBgm(), state.audio.bossTarget, dt, 0.92);
+  }
+
+  function updateDoorSound(dt) {
+    const slide = ensureSlideSfx();
+    const d = state.door || 0;
+    const moved = Math.abs(d - (state.audio.lastDoor || 0)) > 0.002;
+    const moving = state.screen === 'game'
+      && (state.mode === 'normal' || state.mode === 'bossFight')
+      && (state.draggingDoor || state.snapTarget !== null || moved);
+
+    if (!state.musicOn || !moving) {
+      state.audio.slideTarget = 0;
+    } else {
+      state.audio.slideTarget = 1;
+    }
+
+    fadeAudio(slide, state.audio.slideTarget, dt, 4.2);
+
+    if (state.musicOn && state.audio.doorWasMoving && !moving) {
+      if (d <= 0.045 || d >= 0.955) playOpenDoorSound();
+    }
+
+    state.audio.doorWasMoving = moving;
+    state.audio.lastDoor = d;
+  }
+
+  function updateAudio(dt) {
+    if (state.audio.ghostCooldown > 0) state.audio.ghostCooldown = Math.max(0, state.audio.ghostCooldown - dt);
+    updateMusicFade(dt);
+    updateDoorSound(dt);
+  }
+
+  function toggleMusic() {
+    state.musicOn = !state.musicOn;
+    const bgm = ensureBgm();
+    const boss = ensureBossBgm();
+    const slide = ensureSlideSfx();
+    ensureOpenSfx();
+
+    const ctx = ensureAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      try { ctx.resume(); } catch (e) {}
+    }
+
+    if (state.musicOn) {
+      state.audio.normalTarget = desiredMusicKind() === 'normal' ? 1 : 0;
+      state.audio.bossTarget = desiredMusicKind() === 'boss' ? 1 : 0;
+      safePlay(bgm);
+      if (desiredMusicKind() === 'boss') safePlay(boss);
+      setToast(ui('音乐已开启', 'Music on'), 1.0);
+    } else {
+      state.audio.normalTarget = 0;
+      state.audio.bossTarget = 0;
+      state.audio.slideTarget = 0;
       setToast(ui('音乐已关闭', 'Music off'), 1.0);
     }
+  }
+
+  function playOpenDoorSound() {
+    if (!state.musicOn) return;
+    const audio = ensureOpenSfx();
+    if (!audio) return;
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = audio._baseVolume || 0.62;
+      safePlay(audio);
+    } catch (e) {}
+  }
+
+  function playGhostHowl() {
+    if (!state.musicOn) return;
+    if (state.audio.ghostCooldown > 0) return;
+    state.audio.ghostCooldown = 1.1;
+
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const now = ctx.currentTime;
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, now);
+      out.gain.exponentialRampToValueAtTime(0.18, now + 0.06);
+      out.gain.exponentialRampToValueAtTime(0.0001, now + 1.05);
+      out.connect(ctx.destination);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(520, now);
+      filter.frequency.exponentialRampToValueAtTime(115, now + 0.95);
+      filter.Q.setValueAtTime(9, now);
+      filter.connect(out);
+
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(170, now);
+      osc.frequency.exponentialRampToValueAtTime(54, now + 0.98);
+      osc.connect(filter);
+      osc.start(now);
+      osc.stop(now + 1.08);
+
+      const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.95, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.055, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+      noise.connect(filter);
+      noise.start(now + 0.02);
+      noise.stop(now + 0.95);
+    } catch (e) {}
+  }
+
+  function maybePlayGhostDoorSound(c) {
+    if (!c || c.ghostVoicePlayed) return;
+    if (c.type !== 'ghost' && c.type !== 'boss') return;
+    if (state.door <= 0.08) return;
+    c.ghostVoicePlayed = true;
+    playGhostHowl();
   }
 
   function startCorridorAdvance(toRoom = state.room + 1) {
@@ -755,6 +970,9 @@
     state.danger = 0;
     state.draggingDoor = false;
     state.snapTarget = null;
+    state.audio.slideTarget = 0;
+    state.audio.doorWasMoving = false;
+    state.audio.lastDoor = 0;
     state.save.bestRoom = Math.max(state.save.bestRoom || 1, toRoom);
     saveGame();
   }
@@ -769,6 +987,8 @@
     state.door = 0;
     state.danger = 0;
     state.sealFlash = 0;
+    state.audio.lastDoor = 0;
+    state.audio.doorWasMoving = false;
   }
 
   function gameOver(reason) {
@@ -779,6 +999,8 @@
     state.mode = 'normal';
     state.draggingDoor = false;
     state.snapTarget = null;
+    state.audio.slideTarget = 0;
+    state.audio.bossTarget = 0;
   }
 
   function ghostDangerSpeed(g) {
@@ -801,6 +1023,8 @@
     state.door = 0.06;
     state.snapTarget = null;
     state.danger = 0;
+    state.audio.slideTarget = 0;
+    state.audio.doorWasMoving = false;
     setToast('Boss开始顶门！', 1.1);
   }
 
@@ -897,6 +1121,7 @@
 
   function update(dt) {
     state.t += dt;
+    updateAudio(dt);
 
     if (state.screen === 'menu' && state.menuHold && state.menuHold.active && state.pointer.down) {
       state.menuHold.time += dt;
@@ -959,7 +1184,10 @@
 
     const c = state.content;
     if (!c) return;
-    if (state.door > 0.08) markSeenContent();
+    if (state.door > 0.08) {
+      markSeenContent();
+      maybePlayGhostDoorSound(c);
+    }
 
     if (state.mode === 'bossFight') return updateBossFight(dt);
 
@@ -1058,6 +1286,7 @@
       state.dragStartX = p.x;
       state.dragStartDoor = state.door;
       state.snapTarget = null;
+      if (state.musicOn) safePlay(ensureSlideSfx());
     }
   }
 
