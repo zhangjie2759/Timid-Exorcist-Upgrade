@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.7_audio_system';
+  const VERSION = 'v0.13.9_seal_sfx';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -23,7 +23,9 @@
     bgm: ['audio/bgm.wav'],
     boss: ['audio/bossbgm.wav', 'audio/boss bgm.wav'],
     slide: ['audio/slide door.wav', 'audio/slide_door.wav', 'audio/slidedoor.wav'],
-    open: ['audio/opendoor.wav', 'audio/open door.wav']
+    open: ['audio/opendoor.wav', 'audio/open door.wav'],
+    sealSuccess: ['audio/seal_success.wav', 'audio/sealsuccess.wav', 'audio/seal-success.wav'],
+    sealFail: ['audio/seal_fail.wav', 'audio/sealfail.wav', 'audio/seal-fail.wav']
   };
 
   const GHOSTS = [
@@ -195,9 +197,11 @@
       normalTarget: 0,
       bossTarget: 0,
       slideTarget: 0,
+      duck: 0,
       doorWasMoving: false,
       lastDoor: 0,
-      ghostCooldown: 0
+      ghostCooldown: 0,
+      sealSfxCooldown: 0
     },
     toast: null,
     preloadElapsed: 0,
@@ -763,22 +767,22 @@
   }
 
   function ensureBgm() {
-    if (!state.bgm) state.bgm = makeAudio(AUDIO_FILES.bgm, true, 0.34);
+    if (!state.bgm) state.bgm = makeAudio(AUDIO_FILES.bgm, true, 0.22);
     return state.bgm;
   }
 
   function ensureBossBgm() {
-    if (!state.bossBgm) state.bossBgm = makeAudio(AUDIO_FILES.boss, true, 0.48);
+    if (!state.bossBgm) state.bossBgm = makeAudio(AUDIO_FILES.boss, true, 0.52);
     return state.bossBgm;
   }
 
   function ensureSlideSfx() {
-    if (!state.slideSfx) state.slideSfx = makeAudio(AUDIO_FILES.slide, true, 0.44);
+    if (!state.slideSfx) state.slideSfx = makeAudio(AUDIO_FILES.slide, true, 0.95);
     return state.slideSfx;
   }
 
   function ensureOpenSfx() {
-    if (!state.openSfx) state.openSfx = makeAudio(AUDIO_FILES.open, false, 0.62);
+    if (!state.openSfx) state.openSfx = makeAudio(AUDIO_FILES.open, false, 1.0);
     return state.openSfx;
   }
 
@@ -822,18 +826,23 @@
   }
 
   function updateMusicFade(dt) {
+    // duck 会在门声/开关门声/鬼叫声出现时短暂压低BGM，让音效更明显。
+    state.audio.duck = Math.max(0, (state.audio.duck || 0) - dt);
+
+    const duckFactor = state.audio.duck > 0 ? 0.38 : 1;
+
     if (!state.musicOn) {
       state.audio.normalTarget = 0;
       state.audio.bossTarget = 0;
     } else {
       const kind = desiredMusicKind();
       state.audio.currentMusic = kind;
-      state.audio.normalTarget = kind === 'normal' ? 1 : 0;
-      state.audio.bossTarget = kind === 'boss' ? 1 : 0;
+      state.audio.normalTarget = kind === 'normal' ? duckFactor : 0;
+      state.audio.bossTarget = kind === 'boss' ? Math.max(0.55, duckFactor) : 0;
     }
 
-    fadeAudio(ensureBgm(), state.audio.normalTarget, dt, 0.72);
-    fadeAudio(ensureBossBgm(), state.audio.bossTarget, dt, 0.92);
+    fadeAudio(ensureBgm(), state.audio.normalTarget, dt, 0.82);
+    fadeAudio(ensureBossBgm(), state.audio.bossTarget, dt, 1.05);
   }
 
   function updateDoorSound(dt) {
@@ -848,9 +857,10 @@
       state.audio.slideTarget = 0;
     } else {
       state.audio.slideTarget = 1;
+      state.audio.duck = Math.max(state.audio.duck || 0, 0.18);
     }
 
-    fadeAudio(slide, state.audio.slideTarget, dt, 4.2);
+    fadeAudio(slide, state.audio.slideTarget, dt, 6.0);
 
     if (state.musicOn && state.audio.doorWasMoving && !moving) {
       if (d <= 0.045 || d >= 0.955) playOpenDoorSound();
@@ -862,6 +872,7 @@
 
   function updateAudio(dt) {
     if (state.audio.ghostCooldown > 0) state.audio.ghostCooldown = Math.max(0, state.audio.ghostCooldown - dt);
+    if (state.audio.sealSfxCooldown > 0) state.audio.sealSfxCooldown = Math.max(0, state.audio.sealSfxCooldown - dt);
     updateMusicFade(dt);
     updateDoorSound(dt);
   }
@@ -896,11 +907,119 @@
     if (!state.musicOn) return;
     const audio = ensureOpenSfx();
     if (!audio) return;
+    state.audio.duck = Math.max(state.audio.duck || 0, 0.42);
     try {
       audio.pause();
       audio.currentTime = 0;
-      audio.volume = audio._baseVolume || 0.62;
+      audio.volume = 1.0;
       safePlay(audio);
+    } catch (e) {}
+  }
+
+  function playSealSuccessSfx() {
+    if (!state.musicOn) return;
+    if (state.audio.sealSfxCooldown > 0) return;
+    state.audio.sealSfxCooldown = 0.18;
+    state.audio.duck = Math.max(state.audio.duck || 0, 0.55);
+
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.0001, now);
+      master.gain.exponentialRampToValueAtTime(0.42, now + 0.025);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.78);
+      master.connect(ctx.destination);
+
+      // 明亮上扬的“封住了”金属/法术感。
+      const freqs = [520, 780, 1170];
+      freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = i === 0 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(f, now + i * 0.035);
+        osc.frequency.exponentialRampToValueAtTime(f * 1.42, now + 0.38 + i * 0.035);
+        gain.gain.setValueAtTime(0.0001, now + i * 0.035);
+        gain.gain.exponentialRampToValueAtTime(i === 0 ? 0.28 : 0.16, now + 0.06 + i * 0.035);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62 + i * 0.035);
+        osc.connect(gain);
+        gain.connect(master);
+        osc.start(now + i * 0.035);
+        osc.stop(now + 0.74 + i * 0.035);
+      });
+
+      const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.22, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(1500, now);
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.16, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(master);
+      noise.start(now);
+      noise.stop(now + 0.24);
+    } catch (e) {}
+  }
+
+  function playSealFailSfx() {
+    if (!state.musicOn) return;
+    if (state.audio.sealSfxCooldown > 0) return;
+    state.audio.sealSfxCooldown = 0.2;
+    state.audio.duck = Math.max(state.audio.duck || 0, 0.68);
+
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.0001, now);
+      master.gain.exponentialRampToValueAtTime(0.46, now + 0.03);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+      master.connect(ctx.destination);
+
+      // 沉下去的错误/封印失败感。
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(58, now + 0.58);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(620, now);
+      filter.frequency.exponentialRampToValueAtTime(150, now + 0.55);
+      filter.Q.setValueAtTime(6, now);
+
+      osc.connect(filter);
+      filter.connect(master);
+      osc.start(now);
+      osc.stop(now + 0.72);
+
+      const thud = ctx.createOscillator();
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(74, now + 0.02);
+      thud.frequency.exponentialRampToValueAtTime(38, now + 0.32);
+      const thudGain = ctx.createGain();
+      thudGain.gain.setValueAtTime(0.36, now + 0.02);
+      thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+      thud.connect(thudGain);
+      thudGain.connect(master);
+      thud.start(now + 0.02);
+      thud.stop(now + 0.42);
     } catch (e) {}
   }
 
@@ -915,26 +1034,36 @@
       if (ctx.state === 'suspended') ctx.resume();
 
       const now = ctx.currentTime;
+      state.audio.duck = Math.max(state.audio.duck || 0, 0.75);
+
       const out = ctx.createGain();
       out.gain.setValueAtTime(0.0001, now);
-      out.gain.exponentialRampToValueAtTime(0.18, now + 0.06);
-      out.gain.exponentialRampToValueAtTime(0.0001, now + 1.05);
+      out.gain.exponentialRampToValueAtTime(0.36, now + 0.05);
+      out.gain.exponentialRampToValueAtTime(0.0001, now + 1.22);
       out.connect(ctx.destination);
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(520, now);
-      filter.frequency.exponentialRampToValueAtTime(115, now + 0.95);
-      filter.Q.setValueAtTime(9, now);
+      filter.frequency.setValueAtTime(760, now);
+      filter.frequency.exponentialRampToValueAtTime(105, now + 1.05);
+      filter.Q.setValueAtTime(10, now);
       filter.connect(out);
 
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(170, now);
-      osc.frequency.exponentialRampToValueAtTime(54, now + 0.98);
+      osc.frequency.setValueAtTime(230, now);
+      osc.frequency.exponentialRampToValueAtTime(48, now + 1.1);
       osc.connect(filter);
       osc.start(now);
-      osc.stop(now + 1.08);
+      osc.stop(now + 1.25);
+
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(94, now);
+      osc2.frequency.exponentialRampToValueAtTime(38, now + 1.12);
+      osc2.connect(filter);
+      osc2.start(now + 0.03);
+      osc2.stop(now + 1.25);
 
       const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.95, ctx.sampleRate);
       const data = noiseBuffer.getChannelData(0);
@@ -944,7 +1073,7 @@
       const noise = ctx.createBufferSource();
       noise.buffer = noiseBuffer;
       const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.055, now);
+      noiseGain.gain.setValueAtTime(0.11, now);
       noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
       noise.connect(filter);
       noise.start(now + 0.02);
@@ -992,6 +1121,7 @@
   }
 
   function gameOver(reason) {
+    playSealFailSfx();
     state.resultReason = reason;
     state.save.bestRoom = Math.max(state.save.bestRoom || 1, state.room);
     saveGame();
@@ -1039,6 +1169,7 @@
     if (state.door >= 1) {
       if (c.forced) gameOver('强制Boss战失败，Boss冲出来了');
       else {
+        playSealFailSfx();
         setToast('Boss逃走了', 1.1);
         startCorridorAdvance(state.room + 1);
       }
@@ -1070,6 +1201,7 @@
     state.sealFlash = 0.01;
 
     if (c.sealed >= c.requiredSeals) {
+      playSealSuccessSfx();
       const hasZhuyin = c.ghosts.some(isZhuyin);
       c.ghosts.forEach(g => {
         if (g.ghostEye) {
@@ -1099,6 +1231,7 @@
     state.door = Math.max(0, state.door - 0.13);
     state.sealFlash = 0.01;
     if (c.hits >= c.cfg.seals) {
+      playSealSuccessSfx();
       state.bossDefeated[c.stage] = true;
       state.pendingNextRoom = c.stage * 25 + 1;
       state.evolutionOptions = generateEvolutionOptions(c.stage);
@@ -1286,7 +1419,14 @@
       state.dragStartX = p.x;
       state.dragStartDoor = state.door;
       state.snapTarget = null;
-      if (state.musicOn) safePlay(ensureSlideSfx());
+      if (state.musicOn) {
+        state.audio.duck = Math.max(state.audio.duck || 0, 0.18);
+        const slide = ensureSlideSfx();
+        if (slide) {
+          slide.volume = Math.max(slide.volume || 0, 0.35);
+          safePlay(slide);
+        }
+      }
     }
   }
 
