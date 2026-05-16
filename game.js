@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.5_safe_bgm_foresight';
+  const VERSION = 'v0.13.6_ui_talisman';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -14,7 +14,8 @@
     room: 'room/房间.png',
     door: 'room/门.png',
     frame: 'room/门框.png',
-    seal: '封印按钮.png'
+    seal: '封印按钮.png',
+    talisman: '符咒.png'
   };
 
   const BGM_FILE = 'audio/bgm.wav';
@@ -277,7 +278,7 @@
 
   function preloadFilesList() {
     return Array.from(new Set([
-      ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.seal,
+      ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.seal, ROOM_ASSETS.talisman,
       ...GHOST_FIRE_FILES,
       ...GHOSTS.map(g => g.file),
       ...PEOPLE.map(p => p.file)
@@ -312,7 +313,8 @@
   }
 
   function computeLayout(w, h) {
-    const topH = Math.max(84, Math.min(104, h * 0.112));
+    // 顶部信息区加高，避免音乐按钮/主页按钮/关卡文字互相压住。
+    const topH = Math.max(118, Math.min(138, h * 0.135));
     const bottomH = Math.max(112, Math.min(140, h * 0.15));
     const gameTop = topH;
     const gameBottom = h - bottomH;
@@ -329,8 +331,8 @@
     return {
       w, h, topH, bottomH, gameTop, gameBottom, gameH,
       door, hole,
-      home: { x: 66, y: 20, w: 64, h: 36 },
-      galleryButton: { x: w - 86, y: 20, w: 76, h: 36 },
+      home: { x: 68, y: 18, w: 62, h: 36 },
+      galleryButton: { x: w - 88, y: 18, w: 78, h: 36 },
       sealButton: { x: w / 2 - 92, y: h - 124, w: 184, h: 84 },
       bossButton: { x: w / 2 - 136, y: h - 118, w: 272, h: 76 }
     };
@@ -1912,6 +1914,18 @@
     ctx.translate(x, y);
     ctx.rotate(rot);
     ctx.globalAlpha = alpha;
+
+    const img = getAssetImage(ROOM_ASSETS.talisman);
+    if (img) {
+      // 优先调用 images/符咒.png。尺寸按原图比例绘制，避免变形。
+      const targetH = Math.max(h * 1.35, 80);
+      const targetW = targetH * (img.naturalWidth / img.naturalHeight);
+      ctx.drawImage(img, -targetW / 2, -targetH / 2, targetW, targetH);
+      ctx.restore();
+      return;
+    }
+
+    // 找不到符咒素材时，保留代码绘制的备用符。
     const ww = Math.max(w * 0.72, 34);
     const hh = Math.max(h * 1.12, 72);
     ctx.fillStyle = '#f7d85a';
@@ -1972,6 +1986,7 @@
   function drawTopUI() {
     const l = state.layout;
     const prog = currentStageProgress();
+
     ctx.save();
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, l.w, l.topH);
@@ -1985,39 +2000,52 @@
     drawMiniButton(l.home, ui('主页', 'Home'), 'home');
     drawMiniButton(l.galleryButton, ui('图鉴', 'Archive'), 'galleryTop');
 
+    const textX = l.home.x + l.home.w + 12;
+    const textMax = Math.max(96, l.galleryButton.x - textX - 10);
+
     ctx.fillStyle = '#111';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 16px system-ui, sans-serif';
-    ctx.fillText(ui(`第 ${state.room} 门`, `Door ${state.room}`), 86, 23);
-    ctx.font = '700 11px system-ui, sans-serif';
-    const diff = state.difficulty === 'easy' ? ui('简单', 'Easy') : ui('困难', 'Hard');
-    ctx.fillText(ui(`难度 ${diff}  最高 ${state.save.bestRoom || 1}`, `${diff}  Best ${state.save.bestRoom || 1}`), 86, 44);
-    ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${prog.boss.name}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), 86, 61);
-    ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillText(ui(`妖变 ${activeEvolutionText()}`, `Mutations ${activeEvolutionText()}`), 86, 78);
 
-    const barX = 86;
-    const barY = l.topH - 13;
-    const barW = Math.max(80, l.w - 188);
+    ctx.font = '900 15px system-ui, sans-serif';
+    ctx.fillText(ui(`第 ${state.room} 门`, `Door ${state.room}`), textX, 22, textMax);
+
+    ctx.font = '700 10.5px system-ui, sans-serif';
+    const diff = state.difficulty === 'easy' ? ui('简单', 'Easy') : ui('困难', 'Hard');
+    ctx.fillText(ui(`难度 ${diff}  最高 ${state.save.bestRoom || 1}`, `${diff}  Best ${state.save.bestRoom || 1}`), textX, 41, textMax);
+
+    ctx.font = '700 10.5px system-ui, sans-serif';
+    ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${prog.boss.name}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), textX, 59, textMax);
+
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillText(ui(`妖变 ${activeEvolutionText()}`, `Mutations ${activeEvolutionText()}`), 16, 84, l.w - 32);
+
+    const barX = 16;
+    const barY = l.topH - 16;
+    const barW = Math.max(80, l.w - 32);
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 2;
-    roundRect(barX, barY, barW, 6, 3, true, true, 2);
+    roundRect(barX, barY, barW, 7, 4, true, true, 2);
     ctx.fillStyle = '#111';
-    roundRect(barX, barY, barW * prog.ratio, 6, 3, true, false, 0);
+    roundRect(barX + 2, barY + 2, Math.max(0, (barW - 4) * prog.ratio), 3, 2, true, false, 0);
 
     ctx.textAlign = 'right';
     ctx.font = '700 10px system-ui, sans-serif';
     ctx.fillStyle = '#111';
-    ctx.fillText(collectCountText(), l.w - 10, 64);
-
+    ctx.fillText(collectCountText(), l.w - 10, 65);
+    if (state.testMode) {
+      ctx.font = '900 10px system-ui, sans-serif';
+      ctx.fillText('TEST', l.w - 10, 82);
+    }
     if (state.ghostEye > 0) {
       ctx.font = '800 11px system-ui, sans-serif';
-      ctx.fillText(ui(`鬼眼 ${Math.ceil(state.ghostEye)}s`, `Eye ${Math.ceil(state.ghostEye)}s`), l.w - 10, l.topH - 16);
+      ctx.fillText(ui(`鬼眼 ${Math.ceil(state.ghostEye)}s`, `Eye ${Math.ceil(state.ghostEye)}s`), l.w - 10, l.topH - 29);
     }
 
-    if (state.mode === 'bossFight' && state.content && state.content.type === 'boss') drawBossHPBar();
+    if (state.mode === 'bossFight' && state.content && state.content.type === 'boss') {
+      drawBossHPBar();
+    }
     ctx.restore();
   }
 
@@ -2025,9 +2053,9 @@
     const l = state.layout;
     const c = state.content;
     const ratio = clamp(1 - c.hits / c.cfg.seals, 0, 1);
-    const x = 86;
-    const y = l.topH - 26;
-    const w = l.w - 172;
+    const x = 16;
+    const y = l.topH - 29;
+    const w = l.w - 32;
     const h = 9;
     ctx.save();
     ctx.fillStyle = '#fff';
@@ -2035,7 +2063,7 @@
     ctx.lineWidth = 2;
     roundRect(x, y, w, h, 4, true, true, 2);
     ctx.fillStyle = ratio < 0.3 ? '#ff3b20' : '#111';
-    roundRect(x, y, w * ratio, h, 4, true, false, 0);
+    roundRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), h - 4, 3, true, false, 0);
     ctx.restore();
   }
 
@@ -2507,7 +2535,7 @@
   }
 
   function musicButtonRect() {
-    return { x: 16, y: 18, w: 44, h: 36 };
+    return { x: 10, y: 18, w: 46, h: 36 };
   }
 
   function drawMusicButton() {
