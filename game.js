@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.0_evolution';
+  const VERSION = 'v0.13.1_ui_owl';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -40,7 +40,7 @@
     { name: '松鼠', nameEn: 'Squirrel', file: '小动物/松鼠.png', scale: 0.80, desc: '动作很快，但不是鬼。', descEn: 'It moves quickly, but it is not a ghost.' },
     { name: '熊猫', nameEn: 'Panda', file: '小动物/熊猫.png', scale: 0.80, desc: '安全的小动物。', descEn: 'A safe little animal.' },
     { name: '狐狸', nameEn: 'Fox', file: '小动物/狐狸.png', scale: 0.80, desc: '看起来狡猾，但不是鬼。', descEn: 'Looks cunning, but it is not a ghost.' },
-    { name: '猫头鹰', nameEn: 'Owl', file: '小动物/猫头鹰.png', scale: 0.80, galleryScale: 1.35, desc: '眼神很怪，但目前安全。', descEn: 'Its eyes are strange, but it is safe.' },
+    { name: '猫头鹰', nameEn: 'Owl', file: '小动物/猫头鹰.png', scale: 0.80, galleryScale: 1.08, gameScale: 0.78, gameOffsetX: 0.22, gameOffsetY: -0.18, desc: '眼神很怪，但目前安全。', descEn: 'Its eyes are strange, but it is safe.' },
     { name: '鸭子', nameEn: 'Duck', file: '小动物/鸭子.png', scale: 0.80, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' }
   ];
 
@@ -361,17 +361,21 @@
     const levelText = isEn() ? EVOLUTION_LEVEL_TEXT_EN[option.nextLevel] : EVOLUTION_LEVEL_TEXT[option.nextLevel];
     const action = option.type === 'learn'
       ? ui('学会', 'Learn')
-      : ui('强化', 'Strengthen');
-    return `${action}「${isEn() ? skill.nameEn : skill.name}」${levelText ? ' · ' + levelText : ''}`;
+      : ui('强化', 'Boost');
+    const name = isEn() ? skill.nameEn : skill.name;
+    // 英文版本尽量短，避免技能卡标题溢出。
+    return isEn()
+      ? `${name}${levelText ? ' · ' + levelText : ''}`
+      : `${action}「${name}」${levelText ? ' · ' + levelText : ''}`;
   }
 
   function evolutionDesc(option) {
     const skill = skillById(option.id);
     const level = option.nextLevel;
-    const zh = skill.desc;
-    const en = skill.descEn;
+    const base = isEn() ? skill.descEn : skill.desc;
     const extra = evolutionEffectText(option.id, level);
-    return `${isEn() ? en : zh}${extra ? ' ' + extra : ''}`;
+    // 如果效果文本已经把机制说清楚，就优先显示效果文本，减少技能框里文字拥挤。
+    return extra || base;
   }
 
   function evolutionEffectText(id, level) {
@@ -1392,7 +1396,11 @@
     ctx.clip();
 
     if (content.type === 'person') {
-      drawCharacter(content.person, door.x + door.w / 2, floorY, door.h * 0.50, 'person', 1);
+      const p = content.person;
+      const px = door.x + door.w / 2 + door.w * (p.gameOffsetX || 0);
+      const pfloor = floorY + door.h * (p.gameOffsetY || 0);
+      const pHeight = door.h * 0.50 * (p.gameScale || 1);
+      drawCharacter(p, px, pfloor, pHeight, 'person', 1);
     } else if (content.type === 'ghost') {
       const count = content.ghosts.length;
       const approach = content === state.content ? ghostApproachStep() : 0;
@@ -2014,7 +2022,7 @@
     roundRect(l.w * 0.07, l.h * 0.12, l.w * 0.86, l.h * 0.20, 24, true, true, 5);
 
     ctx.fillStyle = '#111';
-    ctx.font = '900 32px system-ui, sans-serif';
+    ctx.font = isEn() ? '900 30px system-ui, sans-serif' : '900 32px system-ui, sans-serif';
     ctx.fillText(ui('妖怪进化', 'Monster Evolution'), l.w / 2, l.h * 0.18);
 
     ctx.font = '800 13px system-ui, sans-serif';
@@ -2039,7 +2047,6 @@
 
   function drawEvolutionCard(r, option, id) {
     if (!option) return;
-    const skill = skillById(option.id);
     drawPressTransform(r, id, () => {
       ctx.fillStyle = '#fffdf6';
       ctx.strokeStyle = '#111';
@@ -2050,18 +2057,19 @@
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
 
-      ctx.font = '900 20px system-ui, sans-serif';
-      ctx.fillText(ui('封印这个进化', 'Seal this mutation'), r.x + 20, r.y + 18);
+      ctx.font = isEn() ? '900 16px system-ui, sans-serif' : '900 18px system-ui, sans-serif';
+      ctx.fillText(ui('封印这个进化', 'Seal this mutation'), r.x + 20, r.y + 16);
 
-      ctx.font = '900 24px system-ui, sans-serif';
-      ctx.fillText(evolutionTitle(option), r.x + 20, r.y + 48);
+      ctx.font = isEn() ? '900 22px system-ui, sans-serif' : '900 23px system-ui, sans-serif';
+      const titleBottom = wrapText(evolutionTitle(option), r.x + 20, r.y + 45, r.w - 40, isEn() ? 25 : 27, 'left');
 
-      ctx.font = '700 13px system-ui, sans-serif';
-      wrapText(evolutionDesc(option), r.x + 20, r.y + 83, r.w - 40, 18, 'left');
+      ctx.font = isEn() ? '700 12.5px system-ui, sans-serif' : '700 13px system-ui, sans-serif';
+      wrapText(evolutionDesc(option), r.x + 20, titleBottom + 8, r.w - 40, isEn() ? 17 : 18, 'left');
 
       ctx.textAlign = 'right';
-      ctx.font = '900 15px system-ui, sans-serif';
-      ctx.fillText(ui('点选封印', 'Tap to seal'), r.x + r.w - 20, r.y + r.h - 28);
+      ctx.textBaseline = 'bottom';
+      ctx.font = isEn() ? '900 13px system-ui, sans-serif' : '900 14px system-ui, sans-serif';
+      ctx.fillText(ui('点选封印', 'Tap to seal'), r.x + r.w - 20, r.y + r.h - 18);
     });
   }
 
