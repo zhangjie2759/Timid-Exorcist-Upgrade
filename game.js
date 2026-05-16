@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.14.0_sfx_polish';
+  const VERSION = 'v0.14.1_sfx_independent';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -187,6 +187,8 @@
     testZhuyinUsed: false,
     menuHold: null,
     musicOn: false,
+    sfxOn: true,
+    audioUnlocked: false,
     bgm: null,
     bossBgm: null,
     slideSfx: null,
@@ -798,6 +800,23 @@
     }
   }
 
+  function unlockAudio() {
+    state.audioUnlocked = true;
+    const ctx = ensureAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      try { ctx.resume(); } catch (e) {}
+    }
+    // 预创建音频对象，后续音效不会因为第一次创建而延迟。
+    ensureBgm();
+    ensureBossBgm();
+    ensureSlideSfx();
+    ensureOpenSfx();
+  }
+
+  function sfxAllowed() {
+    return state.sfxOn !== false && state.audioUnlocked !== false;
+  }
+
   function safePlay(audio) {
     if (!audio) return;
     try {
@@ -853,7 +872,7 @@
       && (state.mode === 'normal' || state.mode === 'bossFight')
       && (state.draggingDoor || state.snapTarget !== null || moved);
 
-    if (!state.musicOn || !moving) {
+    if (!sfxAllowed() || !moving) {
       state.audio.slideTarget = 0;
     } else {
       state.audio.slideTarget = 1;
@@ -862,7 +881,7 @@
 
     fadeAudio(slide, state.audio.slideTarget, dt, 6.0);
 
-    if (state.musicOn && state.audio.doorWasMoving && !moving) {
+    if (sfxAllowed() && state.audio.doorWasMoving && !moving) {
       if (d <= 0.045 || d >= 0.955) playOpenDoorSound();
     }
 
@@ -878,16 +897,11 @@
   }
 
   function toggleMusic() {
+    unlockAudio();
     state.musicOn = !state.musicOn;
+
     const bgm = ensureBgm();
     const boss = ensureBossBgm();
-    const slide = ensureSlideSfx();
-    ensureOpenSfx();
-
-    const ctx = ensureAudioContext();
-    if (ctx && ctx.state === 'suspended') {
-      try { ctx.resume(); } catch (e) {}
-    }
 
     if (state.musicOn) {
       state.audio.normalTarget = desiredMusicKind() === 'normal' ? 1 : 0;
@@ -898,13 +912,12 @@
     } else {
       state.audio.normalTarget = 0;
       state.audio.bossTarget = 0;
-      state.audio.slideTarget = 0;
-      setToast(ui('音乐已关闭', 'Music off'), 1.0);
+      setToast(ui('音乐已关闭，音效保留', 'Music off, SFX stay on'), 1.2);
     }
   }
 
   function playOpenDoorSound() {
-    if (!state.musicOn) return;
+    if (!sfxAllowed()) return;
     const audio = ensureOpenSfx();
     if (!audio) return;
     state.audio.duck = Math.max(state.audio.duck || 0, 0.42);
@@ -917,7 +930,7 @@
   }
 
   function playSealSuccessSfx() {
-    if (!state.musicOn) return;
+    if (!sfxAllowed()) return;
     if (state.audio.sealSfxCooldown > 0) return;
     state.audio.sealSfxCooldown = 0.18;
     state.audio.duck = Math.max(state.audio.duck || 0, 0.82);
@@ -1010,7 +1023,7 @@
   }
 
   function playSealFailSfx() {
-    if (!state.musicOn) return;
+    if (!sfxAllowed()) return;
     if (state.audio.sealSfxCooldown > 0) return;
     state.audio.sealSfxCooldown = 0.2;
     state.audio.duck = Math.max(state.audio.duck || 0, 0.68);
@@ -1060,7 +1073,7 @@
   }
 
   function playGhostEscapeSfx() {
-    if (!state.musicOn) return;
+    if (!sfxAllowed()) return;
     state.audio.duck = Math.max(state.audio.duck || 0, 0.95);
 
     const ctx = ensureAudioContext();
@@ -1138,7 +1151,7 @@
   }
 
   function playGhostHowl() {
-    if (!state.musicOn) return;
+    if (!sfxAllowed()) return;
     if (state.audio.ghostCooldown > 0) return;
     state.audio.ghostCooldown = 1.1;
 
@@ -1485,6 +1498,7 @@
     const p = getPointer(e);
     state.pointer = { x: p.x, y: p.y, down: true };
     state.pressed = null;
+    unlockAudio();
 
     if (state.layout && hit(p, inflate(musicButtonRect(), 8))) {
       setPressed('music');
@@ -1538,7 +1552,7 @@
       state.dragStartX = p.x;
       state.dragStartDoor = state.door;
       state.snapTarget = null;
-      if (state.musicOn) {
+      if (sfxAllowed()) {
         state.audio.duck = Math.max(state.audio.duck || 0, 0.18);
         const slide = ensureSlideSfx();
         if (slide) {
