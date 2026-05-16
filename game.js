@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.4_fixed_foresight_bgm';
+  const VERSION = 'v0.13.5_safe_bgm_foresight';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -177,7 +177,6 @@
     testMode: false,
     testZhuyinUsed: false,
     menuHold: null,
-    audioReady: false,
     musicOn: false,
     bgm: null,
     toast: null,
@@ -645,8 +644,8 @@
 
     if (f.phase === 'fly') {
       const totalFly = Math.max(0.1, (state.futureQueue.length || f.count) * f.perDoorTime);
-      const progress = clamp(f.timer / totalFly, 0, 1);
-      f.index = Math.min(state.futureQueue.length - 1, Math.floor(progress * state.futureQueue.length));
+      const p = clamp(f.timer / totalFly, 0, 1);
+      f.index = Math.min(state.futureQueue.length - 1, Math.floor(p * state.futureQueue.length));
       if (f.timer >= totalFly) {
         f.phase = 'return';
         f.timer = 0;
@@ -655,9 +654,7 @@
     }
 
     if (f.phase === 'return') {
-      if (f.timer >= f.returnTime) {
-        finishForesightPreview();
-      }
+      if (f.timer >= f.returnTime) finishForesightPreview();
     }
   }
 
@@ -717,7 +714,7 @@
     try {
       const audio = new Audio(BGM_FILE);
       audio.loop = true;
-      audio.volume = 0.36;
+      audio.volume = 0.34;
       audio.preload = 'auto';
       state.bgm = audio;
       return audio;
@@ -732,15 +729,13 @@
       setToast(ui('音乐加载失败', 'Music failed to load'), 1.2);
       return;
     }
-
     state.musicOn = !state.musicOn;
     if (state.musicOn) {
       audio.play().then(() => {
-        state.audioReady = true;
         setToast(ui('音乐已开启', 'Music on'), 1.0);
       }).catch(() => {
         state.musicOn = false;
-        setToast(ui('点击后才能播放音乐', 'Tap once more to play music'), 1.2);
+        setToast(ui('再点一次音乐按钮', 'Tap music again'), 1.2);
       });
     } else {
       audio.pause();
@@ -1009,8 +1004,7 @@
     state.pointer = { x: p.x, y: p.y, down: true };
     state.pressed = null;
 
-    const l0 = state.layout;
-    if (l0 && hit(p, inflate(musicButtonRect(), 8))) {
+    if (state.layout && hit(p, inflate(musicButtonRect(), 8))) {
       setPressed('music');
       toggleMusic();
       return;
@@ -1291,17 +1285,21 @@
 
   function draw() {
     clear();
-    if (state.screen === 'preload') drawPreload();
-    else if (state.screen === 'menu') drawMenu();
-    else if (state.screen === 'rules') drawRules();
-    else if (state.screen === 'gallery') drawGallery();
-    else if (state.screen === 'evolution') drawEvolution();
-    else if (state.screen === 'foresight') drawForesight();
-    else if (state.screen === 'game') drawGame();
-    else if (state.screen === 'result') drawResult();
-    else drawMenu();
+    try {
+      if (state.screen === 'preload') drawPreload();
+      else if (state.screen === 'menu') drawMenu();
+      else if (state.screen === 'rules') drawRules();
+      else if (state.screen === 'gallery') drawGallery();
+      else if (state.screen === 'evolution') drawEvolution();
+      else if (state.screen === 'foresight') drawForesight();
+      else if (state.screen === 'game') drawGame();
+      else if (state.screen === 'result') drawResult();
+      else drawMenu();
 
-    drawMusicButton();
+      drawMusicButton();
+    } catch (err) {
+      drawErrorScreen(err);
+    }
   }
 
   function drawPreload() {
@@ -1484,41 +1482,38 @@
       const totalFly = Math.max(0.1, count * f.perDoorTime);
       const p = clamp(f.timer / totalFly, 0, 1);
       const travel = p * count * l.w;
-
       drawCorridorCard(-travel, state.content, 0);
       for (let i = 0; i < count; i++) {
-        drawForesightCard((i + 1) * l.w - travel, state.futureQueue[i] && state.futureQueue[i].content, i);
+        const item = state.futureQueue[i];
+        drawForesightMovingCard((i + 1) * l.w - travel, item ? item.content : null);
       }
     } else if (f.phase === 'return') {
       const p = easeInOut(clamp(f.timer / Math.max(0.1, f.returnTime), 0, 1));
       const travel = lerp(count * l.w, 0, p);
       drawCorridorCard(-travel, state.content, 0);
       for (let i = 0; i < count; i++) {
-        drawForesightCard((i + 1) * l.w - travel, state.futureQueue[i] && state.futureQueue[i].content, i);
+        const item = state.futureQueue[i];
+        drawForesightMovingCard((i + 1) * l.w - travel, item ? item.content : null);
       }
     }
 
     ctx.restore();
-
     drawForesightOverlay();
   }
 
-  function drawForesightCard(offset, content, index) {
+  function drawForesightMovingCard(offset, content) {
     const l = state.layout;
     ctx.save();
     ctx.translate(offset, 0);
     ctx.beginPath();
     ctx.rect(0, l.topH, l.w, l.h - l.topH);
     ctx.clip();
-
     drawWallBackground();
     drawRoomBack(l.hole);
     drawContentFor(content, l.door, l.hole);
     drawWallMask();
     drawDoorFrame(l.hole);
     drawBossGlow(content, l.hole);
-
-    // 烛照未来必须没有门遮挡，让玩家直接记忆门后内容。
     ctx.restore();
   }
 
@@ -1547,7 +1542,6 @@
       ctx.fillText(ui('烛照未来开启', 'Foresight Opens'), l.w / 2, panelY + 28);
       ctx.font = '800 13px system-ui, sans-serif';
       ctx.fillText(ui('准备记住接下来的门', 'Get ready to remember the doors'), l.w / 2, panelY + 53);
-
       const ratio = clamp(f.timer / Math.max(0.1, f.prepareTime), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.16)';
       roundRect(panelX + 24, panelY + 66, panelW - 48, 5, 3, true, false, 0);
@@ -1565,7 +1559,6 @@
       ctx.font = '800 13px system-ui, sans-serif';
       ctx.fillText(ui('准备继续开门', 'Prepare to continue'), l.w / 2, panelY + 56);
     }
-
     ctx.restore();
   }
 
@@ -2493,6 +2486,23 @@
       ctx.globalAlpha *= 0.86;
     }
     drawFn();
+    ctx.restore();
+  }
+
+  function drawErrorScreen(err) {
+    const l = state.layout || { w: canvas.clientWidth || 390, h: canvas.clientHeight || 760 };
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, l.w, l.h);
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = '900 18px system-ui, sans-serif';
+    ctx.fillText('游戏绘制出错：', 20, 28);
+    ctx.font = '700 13px system-ui, sans-serif';
+    wrapText(err && err.message ? err.message : String(err), 20, 62, l.w - 40, 20, 'left');
+    ctx.font = '700 12px system-ui, sans-serif';
+    wrapText('请截图控制台错误给我。', 20, 112, l.w - 40, 18, 'left');
     ctx.restore();
   }
 
