@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.3_longpress_test';
+  const VERSION = 'v0.13.4_foresight_bgm';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -16,6 +16,8 @@
     frame: 'room/门框.png',
     seal: '封印按钮.png'
   };
+
+  const BGM_FILE = 'audio/bgm.wav';
 
   const GHOSTS = [
     { name: '猼訑', nameEn: 'Botuo', file: '鬼/猼訑.png', type: 'normal', speed: 1.28, fire: 2, desc: '警觉又狡猾，喜欢躲在门后观察人。', descEn: 'Alert and cunning. It likes watching people from behind the door.' },
@@ -166,7 +168,7 @@
     sealFlash: 0,
     bossDefeated: {},
     futureQueue: [],
-    foresight: { active: false, index: 0, timer: 0, count: 5, perDoorTime: 0.42, used: 0, maxPerRun: 2, returnTo: 'game' },
+    foresight: { active: false, phase: 'prepare', index: 0, timer: 0, count: 5, perDoorTime: 0.46, prepareTime: 1.15, returnTime: 0.65, used: 0, maxPerRun: 2, returnTo: 'game' },
     pendingEvolutionAfterForesight: false,
     evolution: emptyEvolutionState(),
     evolutionOptions: [],
@@ -175,6 +177,9 @@
     testMode: false,
     testZhuyinUsed: false,
     menuHold: null,
+    audioReady: false,
+    musicOn: false,
+    bgm: null,
     toast: null,
     preloadElapsed: 0,
     preloadMin: 0.8,
@@ -585,6 +590,7 @@
     if (!canTriggerForesight()) return false;
 
     state.foresight.active = true;
+    state.foresight.phase = 'prepare';
     state.foresight.index = 0;
     state.foresight.timer = 0;
     state.foresight.used += 1;
@@ -625,11 +631,31 @@
   }
 
   function updateForesight(dt) {
-    state.foresight.timer += dt;
-    if (state.foresight.timer >= state.foresight.perDoorTime) {
-      state.foresight.timer = 0;
-      state.foresight.index += 1;
-      if (state.foresight.index >= state.futureQueue.length) {
+    const f = state.foresight;
+    f.timer += dt;
+
+    if (f.phase === 'prepare') {
+      if (f.timer >= f.prepareTime) {
+        f.phase = 'fly';
+        f.timer = 0;
+        f.index = 0;
+      }
+      return;
+    }
+
+    if (f.phase === 'fly') {
+      const totalFly = Math.max(0.1, (state.futureQueue.length || f.count) * f.perDoorTime);
+      const progress = clamp(f.timer / totalFly, 0, 1);
+      f.index = Math.min(state.futureQueue.length - 1, Math.floor(progress * state.futureQueue.length));
+      if (f.timer >= totalFly) {
+        f.phase = 'return';
+        f.timer = 0;
+      }
+      return;
+    }
+
+    if (f.phase === 'return') {
+      if (f.timer >= f.returnTime) {
         finishForesightPreview();
       }
     }
@@ -660,7 +686,7 @@
     state.eyeFx = 0;
     state.bossDefeated = {};
     state.futureQueue = [];
-    state.foresight = { active: false, index: 0, timer: 0, count: 5, perDoorTime: testMode ? 0.55 : 0.42, used: 0, maxPerRun: testMode ? 99 : 2, returnTo: 'game' };
+    state.foresight = { active: false, phase: 'prepare', index: 0, timer: 0, count: 5, perDoorTime: testMode ? 0.58 : 0.46, prepareTime: 1.15, returnTime: 0.65, used: 0, maxPerRun: testMode ? 99 : 2, returnTo: 'game' };
     state.pendingEvolutionAfterForesight = false;
     state.evolution = emptyEvolutionState();
     state.evolutionOptions = [];
@@ -685,6 +711,42 @@
   }
 
   function setToast(text, time = 1.4) { state.toast = text ? { text, time } : null; }
+
+  function ensureBgm() {
+    if (state.bgm) return state.bgm;
+    try {
+      const audio = new Audio(BGM_FILE);
+      audio.loop = true;
+      audio.volume = 0.36;
+      audio.preload = 'auto';
+      state.bgm = audio;
+      return audio;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function toggleMusic() {
+    const audio = ensureBgm();
+    if (!audio) {
+      setToast(ui('音乐加载失败', 'Music failed to load'), 1.2);
+      return;
+    }
+
+    state.musicOn = !state.musicOn;
+    if (state.musicOn) {
+      audio.play().then(() => {
+        state.audioReady = true;
+        setToast(ui('音乐已开启', 'Music on'), 1.0);
+      }).catch(() => {
+        state.musicOn = false;
+        setToast(ui('点击后才能播放音乐', 'Tap once more to play music'), 1.2);
+      });
+    } else {
+      audio.pause();
+      setToast(ui('音乐已关闭', 'Music off'), 1.0);
+    }
+  }
 
   function startCorridorAdvance(toRoom = state.room + 1) {
     state.mode = 'corridorTransition';
@@ -946,6 +1008,13 @@
     const p = getPointer(e);
     state.pointer = { x: p.x, y: p.y, down: true };
     state.pressed = null;
+
+    const l0 = state.layout;
+    if (l0 && hit(p, inflate(musicButtonRect(), 8))) {
+      setPressed('music');
+      toggleMusic();
+      return;
+    }
 
     if (state.screen === 'menu') return handleMenuDown(p);
     if (state.screen === 'difficulty') return handleDifficultyDown(p);
@@ -1231,6 +1300,8 @@
     else if (state.screen === 'game') drawGame();
     else if (state.screen === 'result') drawResult();
     else drawMenu();
+
+    drawMusicButton();
   }
 
   function drawPreload() {
@@ -1396,122 +1467,48 @@
 
   function drawForesight() {
     const l = state.layout;
-    const item = state.futureQueue[state.foresight.index];
-    const content = item ? item.content : null;
-    const roomNo = item ? item.room : state.room + state.foresight.index + 1;
-    const progress = clamp(state.foresight.timer / Math.max(0.1, state.foresight.perDoorTime), 0, 1);
+    const f = state.foresight;
+    const count = state.futureQueue.length || 1;
 
     ctx.save();
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, l.w, l.h);
 
-    // 轻微白闪/灵魂出窍感。
-    ctx.globalAlpha = 0.12 + Math.sin(state.t * 18) * 0.035;
-    ctx.fillStyle = '#fff6d8';
-    ctx.fillRect(0, 0, l.w, l.h);
-    ctx.globalAlpha = 1;
-
+    // 灵魂出窍感：未来长廊在中部横向掠过，但顶部 UI 保持清楚。
     ctx.beginPath();
     ctx.rect(0, l.topH, l.w, l.h - l.topH);
     ctx.clip();
 
-    // 未来预览：直接展示门后的内容，不画门板，玩家需要靠记忆。
-    drawForesightCard(content);
-    ctx.restore();
+    if (f.phase === 'prepare') {
+      drawCorridorCard(0, state.content, 0);
+    } else if (f.phase === 'fly') {
+      const totalFly = Math.max(0.1, count * f.perDoorTime);
+      const p = clamp(f.timer / totalFly, 0, 1);
+      const travel = p * count * l.w;
 
-    ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 4;
-    roundRect(l.w * 0.07, 18, l.w * 0.86, 76, 20, true, true, 4);
-
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '900 23px system-ui, sans-serif';
-    ctx.fillText(ui('烛照未来', 'Foresight'), l.w / 2, 43);
-    ctx.font = '800 12px system-ui, sans-serif';
-    ctx.fillText(ui(`记住第 ${roomNo} 门 · ${state.foresight.index + 1}/${state.futureQueue.length}`, `Remember Door ${roomNo} · ${state.foresight.index + 1}/${state.futureQueue.length}`), l.w / 2, 70);
-
-    const barW = l.w * 0.56;
-    const barX = (l.w - barW) / 2;
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    roundRect(barX, 104, barW, 8, 4, true, true, 2);
-    ctx.fillStyle = '#111';
-    roundRect(barX + 2, 106, Math.max(0, (barW - 4) * progress), 4, 2, true, false, 0);
-    ctx.restore();
-  }
-
-  function drawForesightCard(content) {
-    const l = state.layout;
-    ctx.save();
-    drawWallBackground();
-    drawRoomBack(l.hole);
-    drawContentFor(content, l.door, l.hole);
-    drawWallMask();
-    drawDoorFrame(l.hole);
-    drawBossGlow(content, l.hole);
-    // 不画门板：这就是“照见门后”的核心表现。
-    ctx.restore();
-  }
-
-  function drawGame() {
-    const l = state.layout;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, l.topH, l.w, l.h - l.topH);
-    ctx.clip();
-
-    // 游戏区域外部留白，不再在门位外侧铺墙。
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
-
-    const shake = screenShakeAmount();
-    if (shake > 0) {
-      ctx.translate(
-        Math.sin(state.t * 52) * shake + Math.sin(state.t * 19) * shake * 0.45,
-        Math.cos(state.t * 47) * shake * 0.45
-      );
+      // 从当前门位向未来门位快速扫过去：当前门离开，未来门依次从右侧进入。
+      drawCorridorCard(-travel, state.content, 0);
+      for (let i = 0; i < count; i++) {
+        drawForesightCard((i + 1) * l.w - travel, state.futureQueue[i] && state.futureQueue[i].content, i);
+      }
+    } else if (f.phase === 'return') {
+      const p = easeInOut(clamp(f.timer / Math.max(0.1, f.returnTime), 0, 1));
+      const travel = lerp(count * l.w, 0, p);
+      drawCorridorCard(-travel, state.content, 0);
+      for (let i = 0; i < count; i++) {
+        drawForesightCard((i + 1) * l.w - travel, state.futureQueue[i] && state.futureQueue[i].content, i);
+      }
     }
 
-    if (state.mode === 'corridorTransition') {
-      // 鬼/ Boss：必须关门后才进入下一门，所以横移时保持闭合门位。
-      // 小动物/空房间：玩家是“开着门通过”，所以门保持打开状态，
-      // 跟随墙、门框、房间内容一起移出画面，避免突然合门的怪感。
-      const safePass = state.content && (state.content.type === 'person' || state.content.type === 'empty');
-      const oldDoor = safePass ? clamp(state.transitionStartDoor || state.door, 0, 1) : 0;
-
-      drawCorridorCard(state.corridorOffset, state.content, oldDoor);
-      drawCorridorCard(state.corridorOffset + l.w, state.nextContent, 0);
-    } else {
-      drawCorridorCard(0, state.content, state.door);
-    }
     ctx.restore();
 
-    drawTopUI();
-    drawGhostEyeFx();
-    drawBottomControls();
-    drawToast();
+    drawForesightOverlay();
   }
 
-  function screenShakeAmount() {
-    if (state.mode === 'sealSuccess') return 4 * clamp(1 - state.sealFlash / 0.62, 0, 1);
-    if (state.mode === 'bossFight') return 1.5 + Math.max(0, state.door - 0.65) * 5;
-    if (state.danger > 0.78) return 3.2;
-    if (state.danger > 0.55) return 1.6;
-    return 0;
-  }
-
-  function drawCorridorCard(offset, content, doorProgress) {
+  function drawForesightCard(offset, content, index) {
     const l = state.layout;
     ctx.save();
     ctx.translate(offset, 0);
-
-    // 关键：每一个“门位模块”必须单独裁切在自己的屏宽范围内。
-    // 否则下一间的墙图会因为图片本身比门洞宽，提前伸进当前门位，
-    // 在横移动画中盖住当前门/门框，产生闪墙和不同步感。
     ctx.beginPath();
     ctx.rect(0, l.topH, l.w, l.h - l.topH);
     ctx.clip();
@@ -1521,799 +1518,56 @@
     drawContentFor(content, l.door, l.hole);
     drawWallMask();
     drawDoorFrame(l.hole);
-    drawBossGlow(content, l.hole);
-    drawDoorPanel(l.door, doorProgress);
-    drawDoorTalismans(content, l.door, doorProgress);
-    drawSealSuccessGlow();
-    drawDangerVignette();
 
+    // 烛照未来必须没有门遮挡，让玩家直接记忆门后内容。
     ctx.restore();
   }
 
-  function drawWallBackground() {
+  function drawForesightOverlay() {
     const l = state.layout;
-    const wall = getAssetImage(ROOM_ASSETS.wall);
-
-    // 画面外不铺墙。每个门位只画自己的墙/地面模块，其余区域保持白色。
-    if (!wall) {
-      ctx.save();
-      ctx.fillStyle = '#f4efe8';
-      roundRect(l.hole.x - l.hole.w * 0.36, l.hole.y - l.hole.h * 0.08, l.hole.w * 1.72, l.hole.h * 1.16, 0, true, false, 0);
-      ctx.restore();
-      return;
-    }
+    const f = state.foresight;
+    const count = state.futureQueue.length || f.count || 5;
 
     ctx.save();
-
-    // room/墙.png 的真实白色门洞区域：
-    // x=420, y=229, w=418, h=718。
-    // 用这组数值把墙图的白色门洞精确贴到代码门洞上，避免白边。
-    const srcHole = { x: 420, y: 229, w: 418, h: 718 };
-    const scale = Math.max(l.hole.w / srcHole.w, l.hole.h / srcHole.h);
-    const drawW = wall.naturalWidth * scale;
-    const drawH = wall.naturalHeight * scale;
-    const drawX = (l.hole.x + l.hole.w / 2) - (srcHole.x + srcHole.w / 2) * scale;
-    const drawY = l.hole.y - srcHole.y * scale;
-
-    ctx.drawImage(wall, drawX, drawY, drawW, drawH);
-    ctx.restore();
-  }
-
-  function drawRoomBack(hole) {
-    const room = getAssetImage(ROOM_ASSETS.room);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(hole.x + 4, hole.y + 4, hole.w - 8, hole.h - 8);
-    ctx.clip();
-    if (room) drawCoverImage(room, hole.x + 6, hole.y + 6, hole.w - 12, hole.h - 12);
-    else {
-      ctx.fillStyle = '#efe5d8';
-      ctx.fillRect(hole.x, hole.y, hole.w, hole.h);
-    }
-    ctx.restore();
-  }
-
-  function drawWallMask() {
-    const l = state.layout;
-    const h = l.hole;
-    ctx.save();
-    ctx.fillStyle = '#d8ccbd';
-    ctx.globalAlpha = 0;
-    ctx.restore();
-
-    // The wall image is already behind the room. Here we add subtle outer shadow so the door hole sits over the content.
-    ctx.save();
-    ctx.strokeStyle = 'rgba(0,0,0,0.42)';
-    ctx.lineWidth = 7;
-    ctx.strokeRect(h.x + 2, h.y + 2, h.w - 4, h.h - 4);
-    ctx.restore();
-  }
-
-  function drawDoorFrame(hole) {
-    const frame = getAssetImage(ROOM_ASSETS.frame);
-    ctx.save();
-    if (frame) {
-      // 门框和门共用同一个绘制框，确保尺寸完全对齐。
-      drawCroppedStretchImage(frame, hole.x, hole.y, hole.w, hole.h, 2);
-    } else {
-      ctx.strokeStyle = '#2d1c12';
-      ctx.lineWidth = 10;
-      ctx.strokeRect(hole.x, hole.y, hole.w, hole.h);
-    }
-    ctx.restore();
-  }
-
-  function drawDoorPanel(door, progress) {
-    const img = getAssetImage(ROOM_ASSETS.door);
-    const slide = door.w * 0.96 * progress;
-    const x = door.x - slide;
-    const alpha = doorAlphaForGhostEye();
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    if (img) {
-      // 裁掉门图四周极细白边，再拉到和门框同一尺寸。
-      drawCroppedStretchImage(img, x, door.y, door.w, door.h, 2);
-    } else {
-      ctx.fillStyle = '#4a2b1c';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 5;
-      roundRect(x, door.y, door.w, door.h, 8, true, true, 5);
-    }
-    ctx.restore();
-  }
-
-  function doorAlphaForGhostEye() {
-    if (state.ghostEye > 0 && state.mode === 'normal') return 0.42;
-    return 1;
-  }
-
-  function drawContentFor(content, door, hole) {
-    if (!content) return;
-    const floorY = hole.y + hole.h * 0.94;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(hole.x + 8, hole.y + 8, hole.w - 16, hole.h - 16);
-    ctx.clip();
-
-    if (content.type === 'person') {
-      const p = content.person;
-      const px = door.x + door.w / 2 + door.w * (p.gameOffsetX || 0);
-      const pfloor = floorY + door.h * (p.gameOffsetY || 0);
-      const pHeight = door.h * 0.50 * (p.gameScale || 1);
-      drawCharacter(p, px, pfloor, pHeight, 'person', 1);
-    } else if (content.type === 'ghost') {
-      const count = content.ghosts.length;
-      const approach = content === state.content ? ghostApproachStep() : 0;
-      const dangerScale = 1 + approach * 0.68;
-      const baseH = door.h * (count === 1 ? 0.56 : count === 2 ? 0.45 : 0.36);
-      const spread = door.w * (count === 1 ? 0 : count === 2 ? 0.25 : 0.30);
-      const ambushShift = door.w * ([0, 0.13, 0.21, 0.29][evolutionLevel('ambush')] || 0);
-      const hideShift = door.w * ([0, 0.12, 0.23, 0.34][evolutionLevel('hideDoor')] || 0);
-      const visibleRatio = [1, 0.55, 0.40, 0.28][evolutionLevel('hideDoor')] || 1;
-
-      content.ghosts.forEach((g, i) => {
-        const gxBase = door.x + door.w / 2 + (count === 1 ? 0 : (i - (count - 1) / 2) * spread);
-        const gx = gxBase - ambushShift - hideShift;
-        const gh = baseH * dangerScale;
-        drawGhostWarningGlow(gx, floorY - gh * 0.52, gh);
-        ctx.save();
-        if (visibleRatio < 1) {
-          const clipW = door.w * visibleRatio;
-          ctx.beginPath();
-          ctx.rect(door.x, door.y, clipW, door.h);
-          ctx.clip();
-        }
-        drawCharacter(g, gx, floorY, baseH, 'ghost', dangerScale);
-        ctx.restore();
-        drawGhostFires(g, gx, floorY - gh * 0.55, gh, Math.max(1, g.fire || 1), i);
-      });
-    } else if (content.type === 'boss') {
-      const approach = state.mode === 'bossFight' && content === state.content ? Math.floor(state.door * 8) / 8 : 0;
-      const scale = state.mode === 'bossFight' && content === state.content ? 1 + approach * 0.45 : 1;
-      const ambushShift = door.w * ([0, 0.08, 0.14, 0.20][evolutionLevel('ambush')] || 0);
-      const bx = door.x + door.w / 2 - ambushShift;
-      drawCharacter(content.bossGhost, bx, floorY + door.h * 0.02, door.h * 0.70, 'boss', scale);
-      drawGhostFires(content.bossGhost, bx, floorY - door.h * 0.50, door.h * 0.74, (content.bossGhost.fire || 3) + 2, 9);
-    }
-    ctx.restore();
-  }
-
-  function drawCharacter(def, x, floorY, targetH, kind, scale = 1) {
-    const img = getAssetImage(def.file);
-    const roleScale = kind === 'ghost' ? 0.92 : kind === 'boss' ? 0.94 : 1;
-    const h = targetH * scale * (def.scale || 1) * roleScale;
-    const aspect = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 0.70;
-    const w = h * aspect;
-    const y = floorY - h;
-
-    ctx.save();
-    if (kind === 'boss') {
-      const pulse = 0.5 + Math.sin(state.t * 14) * 0.5;
-      ctx.shadowColor = 'rgba(255,0,0,0.85)';
-      ctx.shadowBlur = 24 + pulse * 16;
-    }
-    if (img) ctx.drawImage(img, x - w / 2, y, w, h);
-    else drawFallbackCharacter(def.name || displayName(def), x, y, w, h, kind);
-    ctx.restore();
-  }
-
-  function drawFallbackCharacter(name, x, y, w, h, kind) {
-    ctx.save();
-    const isSafe = kind === 'person';
-    ctx.fillStyle = isSafe ? '#fffdf6' : '#111';
-    ctx.strokeStyle = isSafe ? '#111' : '#fffdf6';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.ellipse(x, y + h * 0.50, w * 0.36, h * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = isSafe ? '#111' : '#fffdf6';
-    ctx.font = '800 13px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(String(name || '').slice(0, 4), x, y + h * 0.52);
-    ctx.restore();
-  }
-
-
-  function drawGhostWarningGlow(cx, cy, bodyH) {
-    const weak = evolutionLevel('weakLight');
-    const alpha = [0.26, 0.18, 0.11, 0.055][weak] ?? 0.26;
-    if (alpha <= 0.02) return;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, bodyH * 0.72);
-    g.addColorStop(0, 'rgba(255,28,10,0.95)');
-    g.addColorStop(0.55, 'rgba(255,28,10,0.22)');
-    g.addColorStop(1, 'rgba(255,28,10,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(cx - bodyH * 0.8, cy - bodyH * 0.8, bodyH * 1.6, bodyH * 1.6);
-    ctx.restore();
-  }
-
-  function drawGhostFires(def, cx, cy, bodyH, count, seed = 0) {
-    ctx.save();
-    const base = GHOSTS.findIndex(g => g.name === def.name);
-    const safeSeed = base >= 0 ? base : seed;
-    const max = clamp(count, 1, 7);
-    for (let i = 0; i < max; i++) {
-      const side = i % 2 === 0 ? -1 : 1;
-      const layer = Math.floor(i / 2);
-      const drift = Math.sin(state.t * (1.1 + i * 0.17) + safeSeed * 0.9 + i) * bodyH * 0.035;
-      const bob = Math.sin(state.t * (1.7 + i * 0.23) + i * 1.8) * bodyH * 0.045;
-      const x = cx + side * bodyH * (0.22 + layer * 0.08) + drift;
-      const y = cy - bodyH * (0.04 + layer * 0.035) + bob;
-      const size = bodyH * (0.14 + (i % 3) * 0.022);
-      const img = getAssetImage(GHOST_FIRE_FILES[(safeSeed + i) % GHOST_FIRE_FILES.length]);
-      const pulse = 0.72 + Math.sin(state.t * 3.2 + i) * 0.15;
-      ctx.globalAlpha = clamp(0.70 + pulse * 0.24, 0.58, 1);
-      if (img) ctx.drawImage(img, x - size / 2, y - size * 0.65, size, size * 1.28);
-      else drawCodeGhostFire(x, y, size, pulse);
-    }
-    ctx.restore();
-  }
-
-  function drawCodeGhostFire(x, y, size, pulse) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(1, 1 + pulse * 0.15);
-    const g = ctx.createRadialGradient(0, 0, size * 0.05, 0, 0, size * 0.72);
-    g.addColorStop(0, 'rgba(255,255,220,0.95)');
-    g.addColorStop(0.34, 'rgba(95,255,160,0.72)');
-    g.addColorStop(1, 'rgba(35,220,120,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 0.78);
-    ctx.bezierCurveTo(size * 0.45, -size * 0.28, size * 0.38, size * 0.32, 0, size * 0.48);
-    ctx.bezierCurveTo(-size * 0.42, size * 0.18, -size * 0.40, -size * 0.28, 0, -size * 0.78);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawBossGlow(content, hole) {
-    if (!content || content.type !== 'boss') return;
-    const pulse = 0.5 + Math.sin(state.t * 12) * 0.5;
-    const hpRatio = 1 - (content.hits || 0) / content.cfg.seals;
-    const fast = hpRatio < 0.3 ? 1 : 0.35;
-    ctx.save();
-    ctx.globalAlpha = (state.mode === 'bossFight' ? 0.48 + pulse * fast * 0.24 : 0.34) * ([1, 0.72, 0.48, 0.28][evolutionLevel('weakLight')] || 1);
-    const g = ctx.createRadialGradient(hole.x + hole.w / 2, hole.y + hole.h / 2, 10, hole.x + hole.w / 2, hole.y + hole.h / 2, hole.w * 0.82);
-    g.addColorStop(0, 'rgba(255,28,10,0.95)');
-    g.addColorStop(0.48, 'rgba(255,28,10,0.28)');
-    g.addColorStop(1, 'rgba(255,28,10,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(hole.x - 80, hole.y - 80, hole.w + 160, hole.h + 160);
-    ctx.restore();
-  }
-
-  function actualDoorRectFor(door, progress) {
-    return { x: door.x - door.w * 0.96 * progress, y: door.y, w: door.w, h: door.h };
-  }
-
-  function drawDoorTalismans(content, door, progress) {
-    if (!content || !content.talismans || !content.talismans.length) return;
-    const d = actualDoorRectFor(door, progress);
-    content.talismans.forEach(t => {
-      const age = state.t - (t.born || state.t);
-      let alpha = 1;
-      if (state.mode === 'sealSuccess' && age > 0.15) alpha = clamp(1 - state.sealFlash / 0.62, 0, 1);
-      drawSealPaper(d.x + d.w * t.rx, d.y + d.h * t.ry, d.w * 0.25 * t.scale, d.h * 0.118 * t.scale, t.rot, alpha);
-    });
-  }
-
-  function drawSealPaper(x, y, w, h, rot, alpha) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rot);
-    ctx.globalAlpha = alpha;
-    const ww = Math.max(w * 0.72, 34);
-    const hh = Math.max(h * 1.12, 72);
-    ctx.fillStyle = '#f7d85a';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
-    roundRect(-ww / 2, -hh / 2, ww, hh, 5, true, true, 3);
-    ctx.strokeStyle = '#b11616';
-    ctx.lineWidth = 2;
-    roundRect(-ww / 2 + 5, -hh / 2 + 6, ww - 10, hh - 12, 3, false, true, 2);
-    ctx.fillStyle = '#b11616';
-    ctx.font = `900 ${Math.max(18, ww * 0.48)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('封', 0, -hh * 0.20);
-    ctx.font = `900 ${Math.max(14, ww * 0.36)}px serif`;
-    ctx.fillText('印', 0, hh * 0.18);
-    ctx.restore();
-  }
 
-  function drawSealSuccessGlow() {
-    if (state.mode !== 'sealSuccess') return;
-    const l = state.layout;
-    const alpha = clamp(1 - state.sealFlash / 0.62, 0, 1);
-    ctx.save();
-    ctx.globalAlpha = alpha * 0.35;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
-    ctx.globalAlpha = alpha * 0.55;
-    ctx.strokeStyle = '#ffe243';
-    ctx.lineWidth = 12;
-    roundRect(l.hole.x - 8, l.hole.y - 8, l.hole.w + 16, l.hole.h + 16, 18, false, true, 12);
-    ctx.restore();
-  }
+    const panelW = Math.min(330, l.w * 0.78);
+    const panelX = (l.w - panelW) / 2;
+    const panelY = 72;
 
-  function drawDangerVignette() {
-    if (state.danger <= 0.02 || state.mode !== 'normal') return;
-    const l = state.layout;
-    ctx.save();
-    ctx.globalAlpha = clamp(state.danger, 0, 1) * 0.46;
-    const g = ctx.createRadialGradient(l.w / 2, l.h / 2, l.w * 0.15, l.w / 2, l.h / 2, l.w * 0.72);
-    g.addColorStop(0, 'rgba(255,0,0,0)');
-    g.addColorStop(1, 'rgba(255,0,0,0.9)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
-    ctx.restore();
-
-    if (state.danger > 0.78) {
-      ctx.save();
-      ctx.globalAlpha = (state.danger - 0.78) * 2.3;
-      ctx.fillStyle = '#111';
-      ctx.font = '900 18px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(ui('太久了……', 'Too long...'), l.w / 2, l.topH + 40);
-      ctx.restore();
-    }
-  }
-
-  function drawTopUI() {
-    const l = state.layout;
-    const prog = currentStageProgress();
-    ctx.save();
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, l.w, l.topH);
+    ctx.fillStyle = 'rgba(255,253,246,0.94)';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(0, l.topH - 2);
-    ctx.lineTo(l.w, l.topH - 2);
-    ctx.stroke();
+    roundRect(panelX, panelY, panelW, 76, 20, true, true, 4);
 
-    drawMiniButton(l.home, ui('主页', 'Home'), 'home');
-    drawMiniButton(l.galleryButton, ui('图鉴', 'Archive'), 'galleryTop');
-
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.font = '900 16px system-ui, sans-serif';
-    ctx.fillText(ui(`第 ${state.room} 门`, `Door ${state.room}`), 86, 23);
-    ctx.font = '700 11px system-ui, sans-serif';
-    const diff = state.difficulty === 'easy' ? ui('简单', 'Easy') : ui('困难', 'Hard');
-    ctx.fillText(ui(`难度 ${diff}  最高 ${state.save.bestRoom || 1}`, `${diff}  Best ${state.save.bestRoom || 1}`), 86, 44);
-    ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${prog.boss.name}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), 86, 61);
-    ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillText(ui(`妖变 ${activeEvolutionText()}`, `Mutations ${activeEvolutionText()}`), 86, 78);
-
-    const barX = 86;
-    const barY = l.topH - 13;
-    const barW = Math.max(80, l.w - 188);
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    roundRect(barX, barY, barW, 6, 3, true, true, 2);
-    ctx.fillStyle = '#111';
-    roundRect(barX, barY, barW * prog.ratio, 6, 3, true, false, 0);
-
-    ctx.textAlign = 'right';
-    ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillStyle = '#111';
-    ctx.fillText(collectCountText(), l.w - 10, 64);
-
-    if (state.ghostEye > 0) {
-      ctx.font = '800 11px system-ui, sans-serif';
-      ctx.fillText(ui(`鬼眼 ${Math.ceil(state.ghostEye)}s`, `Eye ${Math.ceil(state.ghostEye)}s`), l.w - 10, l.topH - 16);
-    }
-
-    if (state.mode === 'bossFight' && state.content && state.content.type === 'boss') drawBossHPBar();
-    ctx.restore();
-  }
-
-  function drawBossHPBar() {
-    const l = state.layout;
-    const c = state.content;
-    const ratio = clamp(1 - c.hits / c.cfg.seals, 0, 1);
-    const x = 86;
-    const y = l.topH - 26;
-    const w = l.w - 172;
-    const h = 9;
-    ctx.save();
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    roundRect(x, y, w, h, 4, true, true, 2);
-    ctx.fillStyle = ratio < 0.3 ? '#ff3b20' : '#111';
-    roundRect(x, y, w * ratio, h, 4, true, false, 0);
-    ctx.restore();
-  }
-
-  function drawBottomControls() {
-    const l = state.layout;
-    if (state.mode === 'corridorTransition' || state.mode === 'sealSuccess') return;
-    if (state.mode === 'bossFight') return drawBossSealButton(l.bossButton);
-    drawSealButton(l.sealButton);
-  }
-
-  function drawSealButton(r) {
-    const img = getAssetImage(ROOM_ASSETS.seal);
-    drawPressTransform(r, 'seal', () => {
-      if (img) drawContainImage(img, r.x, r.y, r.w, r.h);
-      else {
-        ctx.fillStyle = '#fff06d';
-        ctx.strokeStyle = '#111';
-        ctx.lineWidth = 4;
-        roundRect(r.x, r.y, r.w, r.h, 15, true, true, 4);
-        ctx.fillStyle = '#111';
-        ctx.font = '900 25px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('封 印', r.x + r.w / 2, r.y + r.h / 2);
-      }
-    });
-  }
-
-  function drawBossSealButton(r) {
-    ctx.save();
-    const beat = 1 + Math.sin(state.t * 18) * 0.025;
-    const press = isPressed('bossSeal') ? 0.94 : 1;
-    const cx = r.x + r.w / 2;
-    const cy = r.y + r.h / 2;
-    ctx.translate(cx, cy);
-    ctx.scale(beat * press, beat * press);
-    ctx.globalAlpha = isPressed('bossSeal') ? 0.86 : 1;
-    const rr = { x: -r.w / 2, y: -r.h / 2, w: r.w, h: r.h };
-    ctx.fillStyle = '#fff06d';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 5;
-    roundRect(rr.x, rr.y, rr.w, rr.h, 18, true, true, 5);
     ctx.fillStyle = '#111';
     ctx.font = '900 24px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(ui('疯狂贴封印！', 'Seal Fast!'), 0, 0);
-    ctx.restore();
-  }
 
-  function drawGhostEyeFx() {
-    if (state.eyeFx <= 0) return;
-    const l = state.layout;
-    const p = clamp(state.eyeFx / 1.05, 0, 1);
-    ctx.save();
-    ctx.globalAlpha = p * 0.85;
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
-    ctx.translate(l.w / 2, l.topH + (l.h - l.topH) * 0.42);
-    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(-86, 0);
-    ctx.quadraticCurveTo(0, -52, 86, 0);
-    ctx.quadraticCurveTo(0, 52, -86, 0);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, 24, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, 8, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.78)';
-    ctx.fill();
-    ctx.restore();
-  }
+    if (f.phase === 'prepare') {
+      ctx.fillText(ui('烛照未来开启', 'Foresight Opens'), l.w / 2, panelY + 28);
+      ctx.font = '800 13px system-ui, sans-serif';
+      ctx.fillText(ui('准备记住接下来的门', 'Get ready to remember the doors'), l.w / 2, panelY + 53);
 
-  function drawToast() {
-    if (!state.toast) return;
-    const l = state.layout;
-    ctx.save();
-    ctx.globalAlpha = clamp(state.toast.time, 0, 1);
-    ctx.fillStyle = '#111';
-    ctx.strokeStyle = '#fffdf6';
-    ctx.lineWidth = 3;
-    const w = Math.min(l.w * 0.78, 300);
-    const h = 42;
-    const x = (l.w - w) / 2;
-    const y = l.topH + 12;
-    roundRect(x, y, w, h, 18, true, true, 3);
-    ctx.fillStyle = '#fffdf6';
-    ctx.font = '800 14px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(toastText(state.toast.text), l.w / 2, y + h / 2);
-    ctx.restore();
-  }
-
-  function toastText(zh) {
-    if (!isEn()) return zh;
-    const map = {
-      'Boss开始顶门！': 'Boss is forcing the door!',
-      '先开门确认': 'Open the door to confirm first.',
-      '关门后才能开始贴符': 'Close the door before sealing.',
-      '先把门关上': 'Close the door first.',
-      '鬼眼开启：10秒透视': 'Ghost Eye: 10 seconds of vision.',
-      '符咒贴上去了': 'Seal placed.',
-      'Boss已封印，进入下一大关': 'Boss sealed. Next stage unlocked.',
-      'Boss逃走了': 'Boss escaped.'
-    };
-    return map[zh] || zh;
-  }
-
-  function drawRules() {
-    drawMenuBackground();
-    drawBackButton();
-    drawTitleBlock(ui('游戏规则', 'Rules'), ui('小动物别封，鬼要关门后封印', 'Do not seal animals. Close the door before sealing ghosts.'));
-    state.rulesScroll = clamp(state.rulesScroll, 0, maxRulesScroll());
-    drawScrollableTextPanel(rulesLines(), rulesPanelRect(), state.rulesScroll);
-  }
-
-  function rulesLines() {
-    return isEn() ? [
-      '1. Drag the wooden door left to peek inside. Release to snap open or closed.',
-      '2. Each cleared door slides away sideways. A new door enters from the corridor.',
-      '3. Ghosts have different speeds. If you stare too long, they will step closer and burst out.',
-      '4. For normal ghosts, close the door first, then tap Seal.',
-      '5. If there is an animal or an empty room, open the door wide enough to pass. Sealing them ends the run.',
-      '6. Sealing the Nine-tailed Fox opens Ghost Eye for 10 seconds.',
-      '7. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
-      '8. After each Boss, choose one mutation to seal. The other one takes effect.',
-      '9. Zhuyin is a rare boss-like spirit. Sealing it briefly reveals future doors.',
-      '10. The Archive records ghosts and animals you have seen.'
-    ] : [
-      '1. 拖动红木滑门向左开门，松手后会自动吸附开/关。',
-      '2. 判断成功后，当前门位会横向滑走，新的门从长廊另一侧滑入。',
-      '3. 鬼有快慢差异，看太久会一段段逼近，危险值满了就会冲出来。',
-      '4. 普通鬼需要先关门，再点击封印。',
-      '5. 门后是小动物或空房间时，开到足够大即可通过；乱封会直接失败。',
-      '6. 封印九尾狐后开启10秒鬼眼，门会变透明。',
-      '7. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
-      '8. 每次打败Boss后会出现妖怪进化二选一：你封印其中一个，另一个会生效。',
-      '9. 烛阴是极少现身的Boss级妖怪，封印后会短暂照见未来几扇门。',
-      '10. 图鉴会记录见过的鬼和小动物，可以上下滑动查看。'
-    ];
-  }
-
-  function rulesPanelRect() {
-    const l = state.layout;
-    return { x: l.w * 0.07, y: l.h * 0.31, w: l.w * 0.86, h: l.h * 0.55 };
-  }
-
-  function maxRulesScroll() {
-    const r = rulesPanelRect();
-    ctx.save();
-    ctx.font = `${isEn() ? 12 : 14}px system-ui, sans-serif`;
-    const h = measureLinesHeight(rulesLines(), r.w - 36, isEn() ? 17 : 22, 7);
-    ctx.restore();
-    return Math.max(0, h - (r.h - 42));
-  }
-
-  function drawScrollableTextPanel(lines, r, scroll) {
-    ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 4;
-    roundRect(r.x, r.y, r.w, r.h, 18, true, true, 4);
-    ctx.beginPath();
-    ctx.rect(r.x + 12, r.y + 14, r.w - 28, r.h - 28);
-    ctx.clip();
-    ctx.fillStyle = '#111';
-    ctx.font = `${isEn() ? 12 : 14}px system-ui, sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    const lineH = isEn() ? 17 : 22;
-    let yy = r.y + 20 - scroll;
-    lines.forEach(line => {
-      yy = wrapText(line, r.x + 18, yy, r.w - 42, lineH, 'left') + 7;
-    });
-    ctx.restore();
-  }
-
-  function drawGallery() {
-    const m = galleryMetrics();
-    const l = m.l;
-    state.galleryScroll = clamp(state.galleryScroll, 0, maxGalleryScroll());
-    drawMenuBackground();
-    drawBackButton();
-
-    ctx.save();
-    ctx.fillStyle = '#111';
-    ctx.font = '900 30px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(ui('图鉴', 'Archive'), l.w / 2, 45);
-    ctx.restore();
-
-    const tabY = 78;
-    const tabW = Math.min(146, (l.w - 44) / 2);
-    const ghostTab = { x: 18, y: tabY, w: tabW, h: 42 };
-    const peopleTab = { x: 28 + tabW, y: tabY, w: tabW, h: 42 };
-    drawTab(ghostTab, `${ui('鬼图鉴', 'Ghosts')} ${seenGhostCount()}/${GHOSTS.length}`, state.galleryTab === 'ghosts');
-    drawTab(peopleTab, `${ui('小动物图鉴', 'Animals')} ${seenPeopleCount()}/${PEOPLE.length}`, state.galleryTab === 'people');
-
-    const seenMap = state.galleryTab === 'ghosts' ? state.save.ghosts : state.save.people;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, m.startY - 4, l.w, l.h - m.startY + 4);
-    ctx.clip();
-    m.list.forEach((item, i) => {
-      const col = i % m.cols;
-      const row = Math.floor(i / m.cols);
-      const x = 16 + col * (m.cardW + m.gap);
-      const y = m.startY + row * (m.cardH + 14) - state.galleryScroll;
-      if (y > l.h || y + m.cardH < m.startY - 10) return;
-      drawGalleryCard({ x, y, w: m.cardW, h: m.cardH }, item, !!seenMap[item.name]);
-    });
-    ctx.restore();
-  }
-
-  function galleryMetrics() {
-    const l = state.layout;
-    const list = state.galleryTab === 'ghosts' ? GHOSTS : PEOPLE;
-    const cols = isEn() ? 2 : 3;
-    const gap = 12;
-    const cardW = (l.w - 32 - gap * (cols - 1)) / cols;
-    const cardH = isEn() ? Math.min(220, cardW * 1.45) : Math.min(184, cardW * 1.80);
-    const startY = 138;
-    const rows = Math.ceil(list.length / cols);
-    const contentH = rows * (cardH + 14) - 14;
-    const viewH = l.h - startY - 18;
-    return { l, list, cols, gap, cardW, cardH, startY, contentH, viewH };
-  }
-
-  function maxGalleryScroll() {
-    const m = galleryMetrics();
-    return Math.max(0, m.contentH - m.viewH);
-  }
-
-  function drawGalleryCard(r, item, seen) {
-    ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
-    roundRect(r.x, r.y, r.w, r.h, 16, true, true, 3);
-    const imageBox = { x: r.x + 6, y: r.y + 6, w: r.w - 12, h: r.h - (isEn() ? 78 : 66) };
-    ctx.beginPath();
-    ctx.rect(imageBox.x, imageBox.y, imageBox.w, imageBox.h);
-    ctx.clip();
-    if (seen) drawCardImage(item, imageBox);
-    else drawUnknownEgg(imageBox, r.w);
-    ctx.restore();
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(r.x + 6, r.y + r.h - (isEn() ? 72 : 58), r.w - 12, isEn() ? 68 : 54);
-    ctx.clip();
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.font = '800 12px system-ui, sans-serif';
-    ctx.fillText(seen ? displayName(item) : ui('？？？', '???'), r.x + r.w / 2, r.y + r.h - (isEn() ? 70 : 56));
-    ctx.font = `${isEn() ? 9.5 : 10}px system-ui, sans-serif`;
-    const desc = seen ? displayDesc(item) : ui('尚未记录', 'Not recorded yet');
-    wrapText(desc, r.x + r.w / 2, r.y + r.h - (isEn() ? 52 : 38), r.w - 14, isEn() ? 11 : 12, 'center');
-    ctx.restore();
-  }
-
-  function drawCardImage(item, box) {
-    const img = getAssetImage(item.file);
-    if (img) {
-      const pad = 2;
-      const x = box.x + pad;
-      const y = box.y + pad;
-      const w = box.w - pad * 2;
-      const h = box.h - pad * 2;
-      const galleryScale = item.galleryScale || 1;
-
-      if (galleryScale === 1) {
-        drawContainImage(img, x, y, w, h);
-      } else {
-        const ar = img.naturalWidth / img.naturalHeight;
-        let dw = w;
-        let dh = dw / ar;
-        if (dh > h) {
-          dh = h;
-          dw = dh * ar;
-        }
-        dw *= galleryScale;
-        dh *= galleryScale;
-        ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-      }
-    } else {
-      drawFallbackCharacter(item.name, box.x + box.w / 2, box.y + box.h * 0.1, box.w * 0.55, box.h * 0.86, state.galleryTab === 'people' ? 'person' : 'ghost');
-    }
-  }
-
-  function drawUnknownEgg(box, cardW) {
-    ctx.save();
-    const cx = box.x + box.w / 2;
-    const cy = box.y + box.h * 0.52;
-    const rx = Math.min(box.w * 0.24, box.h * 0.28);
-    const ry = Math.min(box.h * 0.32, box.w * 0.38);
-    ctx.fillStyle = '#111';
-    ctx.globalAlpha = 0.92;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.font = `900 ${Math.max(24, cardW * 0.30)}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = '#fffdf6';
-    ctx.fillStyle = '#111';
-    ctx.strokeText('?', cx, cy);
-    ctx.fillText('?', cx, cy);
-    ctx.restore();
-  }
-
-
-  function drawEvolution() {
-    const l = state.layout;
-    drawMenuBackground();
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 5;
-    roundRect(l.w * 0.07, l.h * 0.12, l.w * 0.86, l.h * 0.20, 24, true, true, 5);
-
-    ctx.fillStyle = '#111';
-    ctx.font = isEn() ? '900 30px system-ui, sans-serif' : '900 32px system-ui, sans-serif';
-    ctx.fillText(ui('妖怪进化', 'Monster Evolution'), l.w / 2, l.h * 0.18);
-
-    ctx.font = '800 13px system-ui, sans-serif';
-    ctx.fillText(ui('选择一个封印，另一个会生效', 'Choose one to seal. The other takes effect.'), l.w / 2, l.h * 0.235);
-
-    ctx.font = '700 11px system-ui, sans-serif';
-    ctx.fillText(ui(`当前妖变：${activeEvolutionText()}`, `Active mutations: ${activeEvolutionText()}`), l.w / 2, l.h * 0.285);
-    ctx.restore();
-
-    const opts = state.evolutionOptions || [];
-    const rects = evolutionOptionRects();
-    drawEvolutionCard(rects[0], opts[0], 'evo0');
-    drawEvolutionCard(rects[1], opts[1], 'evo1');
-
-    ctx.save();
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText(ui('你封住的是“现在不会发生”，不是永远消失。', 'Sealed means delayed, not removed forever.'), l.w / 2, l.h - 54);
-    ctx.restore();
-  }
-
-  function drawEvolutionCard(r, option, id) {
-    if (!option) return;
-    drawPressTransform(r, id, () => {
-      ctx.fillStyle = '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 5;
-      roundRect(r.x, r.y, r.w, r.h, 22, true, true, 5);
-
+      const ratio = clamp(f.timer / Math.max(0.1, f.prepareTime), 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,0.16)';
+      roundRect(panelX + 24, panelY + 66, panelW - 48, 5, 3, true, false, 0);
       ctx.fillStyle = '#111';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
+      roundRect(panelX + 24, panelY + 66, (panelW - 48) * ratio, 5, 3, true, false, 0);
+    } else if (f.phase === 'fly') {
+      const totalFly = Math.max(0.1, count * f.perDoorTime);
+      const p = clamp(f.timer / totalFly, 0, 1);
+      const nowIndex = clamp(Math.floor(p * count) + 1, 1, count);
+      ctx.fillText(ui(`烛照未来 ${nowIndex}/${count}`, `Foresight ${nowIndex}/${count}`), l.w / 2, panelY + 32);
+      ctx.font = '800 13px system-ui, sans-serif';
+      ctx.fillText(ui('不要眨眼，记住顺序', 'Do not blink. Remember the order.'), l.w / 2, panelY + 56);
+    } else {
+      ctx.fillText(ui('回到现在', 'Returning'), l.w / 2, panelY + 32);
+      ctx.font = '800 13px system-ui, sans-serif';
+      ctx.fillText(ui('准备继续开门', 'Prepare to continue'), l.w / 2, panelY + 56);
+    }
 
-      ctx.font = isEn() ? '900 16px system-ui, sans-serif' : '900 18px system-ui, sans-serif';
-      ctx.fillText(ui('封印这个进化', 'Seal this mutation'), r.x + 20, r.y + 16);
-
-      ctx.font = isEn() ? '900 22px system-ui, sans-serif' : '900 23px system-ui, sans-serif';
-      const titleBottom = wrapText(evolutionTitle(option), r.x + 20, r.y + 45, r.w - 40, isEn() ? 25 : 27, 'left');
-
-      ctx.font = isEn() ? '700 12.5px system-ui, sans-serif' : '700 13px system-ui, sans-serif';
-      wrapText(evolutionDesc(option), r.x + 20, titleBottom + 8, r.w - 40, isEn() ? 17 : 18, 'left');
-
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'bottom';
-      ctx.font = isEn() ? '900 13px system-ui, sans-serif' : '900 14px system-ui, sans-serif';
-      ctx.fillText(ui('点选封印', 'Tap to seal'), r.x + r.w - 20, r.y + r.h - 18);
-    });
+    ctx.restore();
   }
 
   function drawResult() {
@@ -2382,6 +1636,26 @@
     }
     drawFn();
     ctx.restore();
+  }
+
+  function musicButtonRect() {
+    const l = state.layout;
+    return { x: 16, y: 18, w: 44, h: 36 };
+  }
+
+  function drawMusicButton() {
+    const r = musicButtonRect();
+    drawPressTransform(r, 'music', () => {
+      ctx.fillStyle = state.musicOn ? '#111' : '#fffdf6';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
+      ctx.fillStyle = state.musicOn ? '#fffdf6' : '#111';
+      ctx.font = '900 16px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(state.musicOn ? '♪' : '♫', r.x + r.w / 2, r.y + r.h / 2 + 1);
+    });
   }
 
   function drawMiniButton(r, text, id = '') {
