@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.13.9_seal_sfx';
+  const VERSION = 'v0.14.0_sfx_polish';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -920,7 +920,7 @@
     if (!state.musicOn) return;
     if (state.audio.sealSfxCooldown > 0) return;
     state.audio.sealSfxCooldown = 0.18;
-    state.audio.duck = Math.max(state.audio.duck || 0, 0.55);
+    state.audio.duck = Math.max(state.audio.duck || 0, 0.82);
 
     const ctx = ensureAudioContext();
     if (!ctx) return;
@@ -931,45 +931,81 @@
 
       const master = ctx.createGain();
       master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.42, now + 0.025);
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.78);
+      master.gain.exponentialRampToValueAtTime(0.72, now + 0.018);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 1.05);
       master.connect(ctx.destination);
 
-      // 明亮上扬的“封住了”金属/法术感。
-      const freqs = [520, 780, 1170];
+      // 第一段：贴符“啪”的命中感。
+      const snapBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.055), ctx.sampleRate);
+      const snapData = snapBuffer.getChannelData(0);
+      for (let i = 0; i < snapData.length; i++) {
+        snapData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / snapData.length, 3);
+      }
+      const snap = ctx.createBufferSource();
+      snap.buffer = snapBuffer;
+      const snapFilter = ctx.createBiquadFilter();
+      snapFilter.type = 'bandpass';
+      snapFilter.frequency.setValueAtTime(2100, now);
+      snapFilter.Q.setValueAtTime(2.4, now);
+      const snapGain = ctx.createGain();
+      snapGain.gain.setValueAtTime(0.48, now);
+      snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+      snap.connect(snapFilter);
+      snapFilter.connect(snapGain);
+      snapGain.connect(master);
+      snap.start(now);
+      snap.stop(now + 0.075);
+
+      // 第二段：上扬的法术铃音，强化“封住了”的爽感。
+      const freqs = [392, 523.25, 659.25, 987.77, 1318.51];
       freqs.forEach((f, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = i === 0 ? 'triangle' : 'sine';
-        osc.frequency.setValueAtTime(f, now + i * 0.035);
-        osc.frequency.exponentialRampToValueAtTime(f * 1.42, now + 0.38 + i * 0.035);
-        gain.gain.setValueAtTime(0.0001, now + i * 0.035);
-        gain.gain.exponentialRampToValueAtTime(i === 0 ? 0.28 : 0.16, now + 0.06 + i * 0.035);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62 + i * 0.035);
+        osc.type = i < 2 ? 'triangle' : 'sine';
+        const st = now + 0.045 + i * 0.032;
+        osc.frequency.setValueAtTime(f, st);
+        osc.frequency.exponentialRampToValueAtTime(f * 1.18, st + 0.32);
+        gain.gain.setValueAtTime(0.0001, st);
+        gain.gain.exponentialRampToValueAtTime(i < 2 ? 0.34 : 0.20, st + 0.035);
+        gain.gain.exponentialRampToValueAtTime(0.0001, st + 0.72);
         osc.connect(gain);
         gain.connect(master);
-        osc.start(now + i * 0.035);
-        osc.stop(now + 0.74 + i * 0.035);
+        osc.start(st);
+        osc.stop(st + 0.82);
       });
 
-      const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.22, ctx.sampleRate);
-      const data = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < data.length; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      // 第三段：低频短冲击，让成功音更“落地”。
+      const thump = ctx.createOscillator();
+      const thumpGain = ctx.createGain();
+      thump.type = 'sine';
+      thump.frequency.setValueAtTime(94, now + 0.025);
+      thump.frequency.exponentialRampToValueAtTime(42, now + 0.18);
+      thumpGain.gain.setValueAtTime(0.28, now + 0.025);
+      thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+      thump.connect(thumpGain);
+      thumpGain.connect(master);
+      thump.start(now + 0.025);
+      thump.stop(now + 0.26);
+
+      // 尾巴：一点亮闪，避免听起来太干。
+      const shimmerBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.35), ctx.sampleRate);
+      const shimmerData = shimmerBuffer.getChannelData(0);
+      for (let i = 0; i < shimmerData.length; i++) {
+        shimmerData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / shimmerData.length, 1.7);
       }
-      const noise = ctx.createBufferSource();
-      noise.buffer = noiseBuffer;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'highpass';
-      filter.frequency.setValueAtTime(1500, now);
-      const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.16, now);
-      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-      noise.connect(filter);
-      filter.connect(noiseGain);
-      noiseGain.connect(master);
-      noise.start(now);
-      noise.stop(now + 0.24);
+      const shimmer = ctx.createBufferSource();
+      shimmer.buffer = shimmerBuffer;
+      const high = ctx.createBiquadFilter();
+      high.type = 'highpass';
+      high.frequency.setValueAtTime(2800, now);
+      const shimmerGain = ctx.createGain();
+      shimmerGain.gain.setValueAtTime(0.12, now + 0.08);
+      shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+      shimmer.connect(high);
+      high.connect(shimmerGain);
+      shimmerGain.connect(master);
+      shimmer.start(now + 0.08);
+      shimmer.stop(now + 0.5);
     } catch (e) {}
   }
 
@@ -1023,6 +1059,84 @@
     } catch (e) {}
   }
 
+  function playGhostEscapeSfx() {
+    if (!state.musicOn) return;
+    state.audio.duck = Math.max(state.audio.duck || 0, 0.95);
+
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.0001, now);
+      master.gain.exponentialRampToValueAtTime(0.66, now + 0.035);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 1.45);
+      master.connect(ctx.destination);
+
+      // 更大、更直接的鬼叫：上来一声尖叫，然后快速下坠。
+      const screamFilter = ctx.createBiquadFilter();
+      screamFilter.type = 'bandpass';
+      screamFilter.frequency.setValueAtTime(920, now);
+      screamFilter.frequency.exponentialRampToValueAtTime(140, now + 1.18);
+      screamFilter.Q.setValueAtTime(12, now);
+      screamFilter.connect(master);
+
+      const osc1 = ctx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(360, now);
+      osc1.frequency.exponentialRampToValueAtTime(54, now + 1.24);
+      osc1.connect(screamFilter);
+      osc1.start(now);
+      osc1.stop(now + 1.38);
+
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(185, now + 0.02);
+      osc2.frequency.exponentialRampToValueAtTime(42, now + 1.25);
+      osc2.connect(screamFilter);
+      osc2.start(now + 0.02);
+      osc2.stop(now + 1.38);
+
+      // 气流/嘶吼噪声，让它像鬼扑出来，而不是电子错误音。
+      const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.1), ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 0.8);
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(680, now);
+      noiseFilter.frequency.exponentialRampToValueAtTime(110, now + 1.0);
+      noiseFilter.Q.setValueAtTime(3.5, now);
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.34, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.12);
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(master);
+      noise.start(now);
+      noise.stop(now + 1.12);
+
+      // 一下低频冲击，表示“冲出来了”。
+      const hit = ctx.createOscillator();
+      const hitGain = ctx.createGain();
+      hit.type = 'sine';
+      hit.frequency.setValueAtTime(82, now + 0.06);
+      hit.frequency.exponentialRampToValueAtTime(36, now + 0.33);
+      hitGain.gain.setValueAtTime(0.46, now + 0.06);
+      hitGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      hit.connect(hitGain);
+      hitGain.connect(master);
+      hit.start(now + 0.06);
+      hit.stop(now + 0.45);
+    } catch (e) {}
+  }
+
   function playGhostHowl() {
     if (!state.musicOn) return;
     if (state.audio.ghostCooldown > 0) return;
@@ -1038,7 +1152,7 @@
 
       const out = ctx.createGain();
       out.gain.setValueAtTime(0.0001, now);
-      out.gain.exponentialRampToValueAtTime(0.36, now + 0.05);
+      out.gain.exponentialRampToValueAtTime(0.42, now + 0.05);
       out.gain.exponentialRampToValueAtTime(0.0001, now + 1.22);
       out.connect(ctx.destination);
 
@@ -1121,7 +1235,12 @@
   }
 
   function gameOver(reason) {
-    playSealFailSfx();
+    const reasonText = String(reason || '');
+    if (reasonText.includes('鬼冲出来') || reasonText.includes('Boss冲出来')) {
+      playGhostEscapeSfx();
+    } else {
+      playSealFailSfx();
+    }
     state.resultReason = reason;
     state.save.bestRoom = Math.max(state.save.bestRoom || 1, state.room);
     saveGame();
@@ -1169,7 +1288,7 @@
     if (state.door >= 1) {
       if (c.forced) gameOver('强制Boss战失败，Boss冲出来了');
       else {
-        playSealFailSfx();
+        playGhostEscapeSfx();
         setToast('Boss逃走了', 1.1);
         startCorridorAdvance(state.room + 1);
       }
