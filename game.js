@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.12.8_open_safe_transition';
+  const VERSION = 'v0.13.0_evolution';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -60,6 +60,89 @@
     { stage: 5, time: 5.5, seals: 30 }
   ];
 
+
+  const EVOLUTION_SKILLS = [
+    {
+      id: 'silence',
+      name: '消声',
+      nameEn: 'Mute',
+      desc: '妖怪的出现与逼近提示音变弱。',
+      descEn: 'Ghost approach sounds become quieter.',
+      unlockStage: 1,
+      max: 3
+    },
+    {
+      id: 'speed',
+      name: '疾行',
+      nameEn: 'Rush',
+      desc: '妖怪逼近速度提升。',
+      descEn: 'Ghosts approach faster.',
+      unlockStage: 1,
+      max: 3
+    },
+    {
+      id: 'weakLight',
+      name: '弱光',
+      nameEn: 'Dim Omen',
+      desc: '妖怪出现时的红光提示变弱。',
+      descEn: 'Red warning light becomes weaker.',
+      unlockStage: 1,
+      max: 3
+    },
+    {
+      id: 'ambush',
+      name: '伏影',
+      nameEn: 'Shadow Ambush',
+      desc: '妖怪会伏在门侧阴影里，不再总是出现在正中。',
+      descEn: 'Ghosts lurk near the door shadow instead of the center.',
+      unlockStage: 2,
+      max: 3
+    },
+    {
+      id: 'hideDoor',
+      name: '藏门',
+      nameEn: 'Door Hiding',
+      desc: '妖怪躲在门后，不管开多大都只能看到一部分。',
+      descEn: 'Ghosts hide behind the door and only reveal part of themselves.',
+      unlockStage: 3,
+      max: 3
+    },
+    {
+      id: 'multiShadow',
+      name: '多影',
+      nameEn: 'Many Shadows',
+      desc: '多只妖怪同时出现的概率提升。',
+      descEn: 'Multiple ghosts appear more often.',
+      unlockStage: 3,
+      max: 3
+    }
+  ];
+
+  const EVOLUTION_LEVEL_TEXT = [
+    '',
+    '初现',
+    '加深',
+    '大盛'
+  ];
+
+  const EVOLUTION_LEVEL_TEXT_EN = [
+    '',
+    'Awakens',
+    'Deepens',
+    'Intensifies'
+  ];
+
+  function emptyEvolutionState() {
+    return {
+      silence: 0,
+      speed: 0,
+      weakLight: 0,
+      ambush: 0,
+      hideDoor: 0,
+      multiShadow: 0
+    };
+  }
+
   const state = {
     screen: 'preload',
     lang: 'zh',
@@ -82,6 +165,10 @@
     eyeFx: 0,
     sealFlash: 0,
     bossDefeated: {},
+    evolution: emptyEvolutionState(),
+    evolutionOptions: [],
+    evolutionHistory: [],
+    lastEvolution: null,
     toast: null,
     preloadElapsed: 0,
     preloadMin: 0.8,
@@ -260,12 +347,147 @@
     return { stage, index, ratio: index / 25, boss: bossGhostForStage(stage) };
   }
 
+
+  function skillById(id) {
+    return EVOLUTION_SKILLS.find(s => s.id === id) || EVOLUTION_SKILLS[0];
+  }
+
+  function evolutionLevel(id) {
+    return (state.evolution && state.evolution[id]) || 0;
+  }
+
+  function evolutionTitle(option) {
+    const skill = skillById(option.id);
+    const levelText = isEn() ? EVOLUTION_LEVEL_TEXT_EN[option.nextLevel] : EVOLUTION_LEVEL_TEXT[option.nextLevel];
+    const action = option.type === 'learn'
+      ? ui('学会', 'Learn')
+      : ui('强化', 'Strengthen');
+    return `${action}「${isEn() ? skill.nameEn : skill.name}」${levelText ? ' · ' + levelText : ''}`;
+  }
+
+  function evolutionDesc(option) {
+    const skill = skillById(option.id);
+    const level = option.nextLevel;
+    const zh = skill.desc;
+    const en = skill.descEn;
+    const extra = evolutionEffectText(option.id, level);
+    return `${isEn() ? en : zh}${extra ? ' ' + extra : ''}`;
+  }
+
+  function evolutionEffectText(id, level) {
+    const tableZh = {
+      silence: ['音效提示 -30%。', '音效提示 -55%。', '几乎无声，只保留很轻的提示。'],
+      speed: ['逼近速度 +12%。', '逼近速度 +22%。', '逼近速度 +32%。'],
+      weakLight: ['红光提示变弱。', '红光提示明显变弱。', '红光几乎只闪一瞬。'],
+      ambush: ['更常伏在门侧。', '更靠近门边。', '更依赖轮廓判断。'],
+      hideDoor: ['最多露出约55%。', '最多露出约40%。', '最多露出约28%。'],
+      multiShadow: ['双妖怪概率提高。', '双妖怪明显提高。', '多妖怪更常见。']
+    };
+    const tableEn = {
+      silence: ['Sound cues -30%.', 'Sound cues -55%.', 'Almost silent.'],
+      speed: ['Approach speed +12%.', 'Approach speed +22%.', 'Approach speed +32%.'],
+      weakLight: ['Red light becomes weaker.', 'Red light becomes much weaker.', 'Red light barely flashes.'],
+      ambush: ['More often near the door side.', 'Closer to the door edge.', 'More silhouette reading required.'],
+      hideDoor: ['Only about 55% visible.', 'Only about 40% visible.', 'Only about 28% visible.'],
+      multiShadow: ['More double ghosts.', 'Many more double ghosts.', 'Multiple ghosts become common.']
+    };
+    const arr = isEn() ? tableEn[id] : tableZh[id];
+    return arr ? arr[Math.max(0, Math.min(arr.length - 1, level - 1))] : '';
+  }
+
+  function evolutionUnlockedSkills(stage) {
+    return EVOLUTION_SKILLS.filter(s => s.unlockStage <= stage);
+  }
+
+  function makeEvolutionOption(skill, currentLevel) {
+    const nextLevel = Math.min(skill.max, currentLevel + 1);
+    return {
+      id: skill.id,
+      type: currentLevel <= 0 ? 'learn' : 'strengthen',
+      nextLevel
+    };
+  }
+
+  function generateEvolutionOptions(stage) {
+    const unlocked = evolutionUnlockedSkills(stage);
+    const fresh = unlocked
+      .filter(s => evolutionLevel(s.id) <= 0)
+      .map(s => makeEvolutionOption(s, 0));
+    const strengthens = unlocked
+      .filter(s => evolutionLevel(s.id) > 0 && evolutionLevel(s.id) < s.max)
+      .map(s => makeEvolutionOption(s, evolutionLevel(s.id)));
+
+    let pool = [];
+    if (stage <= 1) {
+      pool = fresh.slice();
+    } else if (stage === 2) {
+      pool = fresh.concat(Math.random() < 0.45 ? strengthens : []);
+    } else {
+      // 中后期：优先给一个新技能，再配一个强化；如果新技能学完，就全部强化。
+      pool = fresh.concat(strengthens);
+    }
+
+    if (pool.length < 2) {
+      pool = fresh.concat(strengthens);
+    }
+
+    // 后期如果还有没学会的技能，提高新技能出现概率，保证最终都会慢慢补全。
+    if (stage >= 4 && fresh.length && pool.length >= 2) {
+      pool = fresh.concat(fresh).concat(strengthens);
+    }
+
+    // 去重后抽两个。
+    const unique = [];
+    pool.forEach(o => {
+      const key = `${o.id}_${o.nextLevel}`;
+      if (!unique.some(u => `${u.id}_${u.nextLevel}` === key)) unique.push(o);
+    });
+
+    while (unique.length < 2) {
+      const can = EVOLUTION_SKILLS
+        .filter(s => evolutionLevel(s.id) < s.max && s.unlockStage <= stage)
+        .map(s => makeEvolutionOption(s, evolutionLevel(s.id)));
+      const next = randItem(can.length ? can : EVOLUTION_SKILLS.map(s => makeEvolutionOption(s, evolutionLevel(s.id))));
+      if (!unique.some(u => u.id === next.id && u.nextLevel === next.nextLevel)) unique.push(next);
+      else break;
+    }
+
+    const picked = [];
+    const candidates = unique.slice();
+    while (picked.length < 2 && candidates.length) {
+      const i = Math.floor(Math.random() * candidates.length);
+      picked.push(candidates.splice(i, 1)[0]);
+    }
+    return picked.length >= 2 ? picked : unique.slice(0, 2);
+  }
+
+  function applyEvolution(option) {
+    if (!option) return;
+    const before = evolutionLevel(option.id);
+    state.evolution[option.id] = Math.max(before, option.nextLevel || before + 1);
+  }
+
+  function activeEvolutionText() {
+    const active = EVOLUTION_SKILLS
+      .filter(s => evolutionLevel(s.id) > 0)
+      .map(s => `${isEn() ? s.nameEn : s.name}${evolutionLevel(s.id)}`);
+    return active.length ? active.join(' / ') : ui('暂无', 'None');
+  }
+
   function ghostCountForRoom(room) {
-    if (room < 25) return 1;
-    if (room < 50) return Math.random() < 0.34 ? 2 : 1;
+    const multi = evolutionLevel('multiShadow');
+    if (room < 25 && multi <= 0) return 1;
+
+    const twoBoost = multi * 0.13;
+    const threeBoost = multi * 0.055;
+
+    if (room < 50) {
+      return Math.random() < 0.34 + twoBoost ? 2 : 1;
+    }
+
     const r = Math.random();
-    if (r < 0.22) return 3;
-    if (r < 0.58) return 2;
+    if (r < 0.22 + threeBoost) return 3;
+    if (r < 0.58 + twoBoost) return 2;
     return 1;
   }
 
@@ -325,6 +547,10 @@
     state.ghostEye = 0;
     state.eyeFx = 0;
     state.bossDefeated = {};
+    state.evolution = emptyEvolutionState();
+    state.evolutionOptions = [];
+    state.evolutionHistory = [];
+    state.lastEvolution = null;
     state.toast = null;
     state.resultReason = '';
     createContent();
@@ -340,7 +566,7 @@
     saveGame();
   }
 
-  function setToast(text, time = 1.4) { state.toast = { text, time }; }
+  function setToast(text, time = 1.4) { state.toast = text ? { text, time } : null; }
 
   function startCorridorAdvance(toRoom = state.room + 1) {
     state.mode = 'corridorTransition';
@@ -380,7 +606,8 @@
 
   function ghostDangerSpeed(g) {
     const typeBoost = g.type === 'thin' ? 1.18 : g.type === 'heavy' ? 0.92 : 1;
-    return (g.speed || 1) * typeBoost;
+    const speedBoost = [1, 1.12, 1.22, 1.32][evolutionLevel('speed')] || 1;
+    return (g.speed || 1) * typeBoost * speedBoost;
   }
 
   function ghostApproachStep() {
@@ -465,9 +692,12 @@
     state.sealFlash = 0.01;
     if (c.hits >= c.cfg.seals) {
       state.bossDefeated[c.stage] = true;
-      state.mode = 'sealSuccess';
       state.pendingNextRoom = c.stage * 25 + 1;
-      setToast('Boss已封印，进入下一大关', 1.4);
+      state.evolutionOptions = generateEvolutionOptions(c.stage);
+      state.mode = 'normal';
+      state.door = 0;
+      state.screen = 'evolution';
+      setToast(null);
     }
   }
 
@@ -575,6 +805,7 @@
     if (state.screen === 'difficulty') return handleDifficultyDown(p);
     if (state.screen === 'rules') return handleRulesDown(p);
     if (state.screen === 'gallery') return handleGalleryDown(p);
+    if (state.screen === 'evolution') return handleEvolutionDown(p);
     if (state.screen === 'result') return handleResultDown(p);
     if (state.screen !== 'game') return;
 
@@ -753,6 +984,59 @@
     }
   }
 
+
+  function evolutionOptionRects() {
+    const l = state.layout;
+    const margin = Math.max(24, l.w * 0.08);
+    const w = l.w - margin * 2;
+    const h = Math.min(148, Math.max(126, l.h * 0.17));
+    const y1 = l.h * 0.38;
+    return [
+      { x: margin, y: y1, w, h },
+      { x: margin, y: y1 + h + 22, w, h }
+    ];
+  }
+
+  function handleEvolutionDown(p) {
+    const rects = evolutionOptionRects();
+    if (hit(p, inflate(rects[0], 8))) {
+      setPressed('evo0');
+      chooseEvolution(0);
+      return;
+    }
+    if (hit(p, inflate(rects[1], 8))) {
+      setPressed('evo1');
+      chooseEvolution(1);
+      return;
+    }
+  }
+
+  function chooseEvolution(index) {
+    const opts = state.evolutionOptions || [];
+    if (opts.length < 2) {
+      state.screen = 'game';
+      startCorridorAdvance(state.pendingNextRoom || state.room + 1);
+      return;
+    }
+
+    const sealed = opts[index];
+    const applied = opts[index === 0 ? 1 : 0];
+    applyEvolution(applied);
+
+    state.lastEvolution = { sealed, applied, room: state.room };
+    state.evolutionHistory.push(state.lastEvolution);
+
+    const sealedSkill = skillById(sealed.id);
+    const appliedSkill = skillById(applied.id);
+    setToast(
+      ui(`封印${sealedSkill.name}，妖怪获得${appliedSkill.name}`, `Sealed ${sealedSkill.nameEn}. Ghosts gained ${appliedSkill.nameEn}.`),
+      1.8
+    );
+
+    state.screen = 'game';
+    startCorridorAdvance(state.pendingNextRoom || state.room + 1);
+  }
+
   function handleResultDown(p) {
     const l = state.layout;
     const bw = Math.min(260, l.w * 0.68);
@@ -781,6 +1065,7 @@
     else if (state.screen === 'menu') drawMenu();
     else if (state.screen === 'rules') drawRules();
     else if (state.screen === 'gallery') drawGallery();
+    else if (state.screen === 'evolution') drawEvolution();
     else if (state.screen === 'game') drawGame();
     else if (state.screen === 'result') drawResult();
     else drawMenu();
@@ -1114,17 +1399,33 @@
       const dangerScale = 1 + approach * 0.68;
       const baseH = door.h * (count === 1 ? 0.56 : count === 2 ? 0.45 : 0.36);
       const spread = door.w * (count === 1 ? 0 : count === 2 ? 0.25 : 0.30);
+      const ambushShift = door.w * ([0, 0.13, 0.21, 0.29][evolutionLevel('ambush')] || 0);
+      const hideShift = door.w * ([0, 0.12, 0.23, 0.34][evolutionLevel('hideDoor')] || 0);
+      const visibleRatio = [1, 0.55, 0.40, 0.28][evolutionLevel('hideDoor')] || 1;
+
       content.ghosts.forEach((g, i) => {
-        const gx = door.x + door.w / 2 + (count === 1 ? 0 : (i - (count - 1) / 2) * spread);
+        const gxBase = door.x + door.w / 2 + (count === 1 ? 0 : (i - (count - 1) / 2) * spread);
+        const gx = gxBase - ambushShift - hideShift;
         const gh = baseH * dangerScale;
+        drawGhostWarningGlow(gx, floorY - gh * 0.52, gh);
+        ctx.save();
+        if (visibleRatio < 1) {
+          const clipW = door.w * visibleRatio;
+          ctx.beginPath();
+          ctx.rect(door.x, door.y, clipW, door.h);
+          ctx.clip();
+        }
         drawCharacter(g, gx, floorY, baseH, 'ghost', dangerScale);
+        ctx.restore();
         drawGhostFires(g, gx, floorY - gh * 0.55, gh, Math.max(1, g.fire || 1), i);
       });
     } else if (content.type === 'boss') {
       const approach = state.mode === 'bossFight' && content === state.content ? Math.floor(state.door * 8) / 8 : 0;
       const scale = state.mode === 'bossFight' && content === state.content ? 1 + approach * 0.45 : 1;
-      drawCharacter(content.bossGhost, door.x + door.w / 2, floorY + door.h * 0.02, door.h * 0.70, 'boss', scale);
-      drawGhostFires(content.bossGhost, door.x + door.w / 2, floorY - door.h * 0.50, door.h * 0.74, (content.bossGhost.fire || 3) + 2, 9);
+      const ambushShift = door.w * ([0, 0.08, 0.14, 0.20][evolutionLevel('ambush')] || 0);
+      const bx = door.x + door.w / 2 - ambushShift;
+      drawCharacter(content.bossGhost, bx, floorY + door.h * 0.02, door.h * 0.70, 'boss', scale);
+      drawGhostFires(content.bossGhost, bx, floorY - door.h * 0.50, door.h * 0.74, (content.bossGhost.fire || 3) + 2, 9);
     }
     ctx.restore();
   }
@@ -1162,6 +1463,22 @@
     ctx.font = '800 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(String(name || '').slice(0, 4), x, y + h * 0.52);
+    ctx.restore();
+  }
+
+
+  function drawGhostWarningGlow(cx, cy, bodyH) {
+    const weak = evolutionLevel('weakLight');
+    const alpha = [0.26, 0.18, 0.11, 0.055][weak] ?? 0.26;
+    if (alpha <= 0.02) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, bodyH * 0.72);
+    g.addColorStop(0, 'rgba(255,28,10,0.95)');
+    g.addColorStop(0.55, 'rgba(255,28,10,0.22)');
+    g.addColorStop(1, 'rgba(255,28,10,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - bodyH * 0.8, cy - bodyH * 0.8, bodyH * 1.6, bodyH * 1.6);
     ctx.restore();
   }
 
@@ -1211,7 +1528,7 @@
     const hpRatio = 1 - (content.hits || 0) / content.cfg.seals;
     const fast = hpRatio < 0.3 ? 1 : 0.35;
     ctx.save();
-    ctx.globalAlpha = state.mode === 'bossFight' ? 0.48 + pulse * fast * 0.24 : 0.34;
+    ctx.globalAlpha = (state.mode === 'bossFight' ? 0.48 + pulse * fast * 0.24 : 0.34) * ([1, 0.72, 0.48, 0.28][evolutionLevel('weakLight')] || 1);
     const g = ctx.createRadialGradient(hole.x + hole.w / 2, hole.y + hole.h / 2, 10, hole.x + hole.w / 2, hole.y + hole.h / 2, hole.w * 0.82);
     g.addColorStop(0, 'rgba(255,28,10,0.95)');
     g.addColorStop(0.48, 'rgba(255,28,10,0.28)');
@@ -1322,7 +1639,9 @@
     ctx.font = '700 11px system-ui, sans-serif';
     const diff = state.difficulty === 'easy' ? ui('简单', 'Easy') : ui('困难', 'Hard');
     ctx.fillText(ui(`难度 ${diff}  最高 ${state.save.bestRoom || 1}`, `${diff}  Best ${state.save.bestRoom || 1}`), 86, 44);
-    ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${prog.boss.name}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), 86, 64);
+    ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${prog.boss.name}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), 86, 61);
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillText(ui(`妖变 ${activeEvolutionText()}`, `Mutations ${activeEvolutionText()}`), 86, 78);
 
     const barX = 86;
     const barY = l.topH - 13;
@@ -1493,7 +1812,8 @@
       '5. If there is an animal or an empty room, open the door wide enough to pass. Sealing them ends the run.',
       '6. Sealing the Nine-tailed Fox opens Ghost Eye for 10 seconds.',
       '7. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
-      '8. The Archive records ghosts and animals you have seen.'
+      '8. After each Boss, choose one mutation to seal. The other one takes effect.',
+      '9. The Archive records ghosts and animals you have seen.'
     ] : [
       '1. 拖动红木滑门向左开门，松手后会自动吸附开/关。',
       '2. 判断成功后，当前门位会横向滑走，新的门从长廊另一侧滑入。',
@@ -1502,7 +1822,8 @@
       '5. 门后是小动物或空房间时，开到足够大即可通过；乱封会直接失败。',
       '6. 封印九尾狐后开启10秒鬼眼，门会变透明。',
       '7. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
-      '8. 图鉴会记录见过的鬼和小动物，可以上下滑动查看。'
+      '8. 每次打败Boss后会出现妖怪进化二选一：你封印其中一个，另一个会生效。',
+      '9. 图鉴会记录见过的鬼和小动物，可以上下滑动查看。'
     ];
   }
 
@@ -1678,6 +1999,72 @@
     ctx.restore();
   }
 
+
+  function drawEvolution() {
+    const l = state.layout;
+    drawMenuBackground();
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 5;
+    roundRect(l.w * 0.07, l.h * 0.12, l.w * 0.86, l.h * 0.20, 24, true, true, 5);
+
+    ctx.fillStyle = '#111';
+    ctx.font = '900 32px system-ui, sans-serif';
+    ctx.fillText(ui('妖怪进化', 'Monster Evolution'), l.w / 2, l.h * 0.18);
+
+    ctx.font = '800 13px system-ui, sans-serif';
+    ctx.fillText(ui('选择一个封印，另一个会生效', 'Choose one to seal. The other takes effect.'), l.w / 2, l.h * 0.235);
+
+    ctx.font = '700 11px system-ui, sans-serif';
+    ctx.fillText(ui(`当前妖变：${activeEvolutionText()}`, `Active mutations: ${activeEvolutionText()}`), l.w / 2, l.h * 0.285);
+    ctx.restore();
+
+    const opts = state.evolutionOptions || [];
+    const rects = evolutionOptionRects();
+    drawEvolutionCard(rects[0], opts[0], 'evo0');
+    drawEvolutionCard(rects[1], opts[1], 'evo1');
+
+    ctx.save();
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.font = '700 12px system-ui, sans-serif';
+    ctx.fillText(ui('你封住的是“现在不会发生”，不是永远消失。', 'Sealed means delayed, not removed forever.'), l.w / 2, l.h - 54);
+    ctx.restore();
+  }
+
+  function drawEvolutionCard(r, option, id) {
+    if (!option) return;
+    const skill = skillById(option.id);
+    drawPressTransform(r, id, () => {
+      ctx.fillStyle = '#fffdf6';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 5;
+      roundRect(r.x, r.y, r.w, r.h, 22, true, true, 5);
+
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+
+      ctx.font = '900 20px system-ui, sans-serif';
+      ctx.fillText(ui('封印这个进化', 'Seal this mutation'), r.x + 20, r.y + 18);
+
+      ctx.font = '900 24px system-ui, sans-serif';
+      ctx.fillText(evolutionTitle(option), r.x + 20, r.y + 48);
+
+      ctx.font = '700 13px system-ui, sans-serif';
+      wrapText(evolutionDesc(option), r.x + 20, r.y + 83, r.w - 40, 18, 'left');
+
+      ctx.textAlign = 'right';
+      ctx.font = '900 15px system-ui, sans-serif';
+      ctx.fillText(ui('点选封印', 'Tap to seal'), r.x + r.w - 20, r.y + r.h - 28);
+    });
+  }
+
   function drawResult() {
     const l = state.layout;
     drawMenuBackground();
@@ -1693,6 +2080,8 @@
     ctx.font = '800 16px system-ui, sans-serif';
     ctx.fillText(ui(`本次到达：第 ${state.room} 门`, `Reached Door ${state.room}`), l.w / 2, l.h * 0.445);
     ctx.fillText(ui(`最高纪录：第 ${state.save.bestRoom || 1} 门`, `Best: Door ${state.save.bestRoom || 1}`), l.w / 2, l.h * 0.478);
+    ctx.font = '700 12px system-ui, sans-serif';
+    wrapText(ui(`本局妖变：${activeEvolutionText()}`, `Mutations: ${activeEvolutionText()}`), l.w / 2, l.h * 0.512, l.w * 0.72, 17, 'center');
     ctx.restore();
 
     const bw = Math.min(260, l.w * 0.68);
