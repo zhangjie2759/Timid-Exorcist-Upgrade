@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.14.1_sfx_independent';
+  const VERSION = 'v0.16.1_vermilion_seal_marks';
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -29,17 +29,17 @@
   };
 
   const GHOSTS = [
-    { name: '猼訑', nameEn: 'Botuo', file: '鬼/猼訑.png', type: 'normal', speed: 1.28, fire: 2, desc: '警觉又狡猾，喜欢躲在门后观察人。', descEn: 'Alert and cunning. It likes watching people from behind the door.' },
-    { name: '赤鱬', nameEn: 'Chiru', file: '鬼/赤鱬.png', type: 'thin', speed: 2.08, fire: 2, desc: '细长灵活，动作很快，最擅长突然贴近。', descEn: 'Slim, agile, and fast. It is good at suddenly closing the distance.' },
-    { name: '当康', nameEn: 'Dangkang', file: '鬼/康当.png', type: 'heavy', speed: 1.05, fire: 2, desc: '体型敦实，压迫感强，逼近时像重物挪动。', descEn: 'Heavy and solid. Its approach feels like something massive shifting forward.' },
-    { name: '混沌', nameEn: 'Hundun', file: '鬼/混沌.png', type: 'heavy', speed: 0.72, fire: 3, desc: '轮廓混乱，越盯着看越分不清它的形状。', descEn: 'A chaotic silhouette. The longer you stare, the harder it is to read.' },
-    { name: '九尾狐', nameEn: 'Nine-tailed Fox', file: '鬼/九尾狐.png', type: 'normal', speed: 1.76, fire: 2, ghostEye: true, desc: '擅长迷惑视线。封印后会短暂开启鬼眼，看清当前门后的异常。', descEn: 'A master of deception. Sealing it briefly activates Ghost Eye, revealing the current door.' },
-    { name: '夔牛', nameEn: 'Kui Ox', file: '鬼/夔牛.png', type: 'heavy', speed: 1.18, fire: 2, desc: '独脚震地，虽然不快，但每次靠近都很有压迫。', descEn: 'Not the fastest, but every step feels heavy and oppressive.' },
-    { name: '麒麟', nameEn: 'Qilin', file: '鬼/麒麟.png', type: 'normal', speed: 1.42, fire: 2, desc: '外表庄重，但在门后出现时往往并不吉利。', descEn: 'It looks solemn, but seeing it behind the door is never a good sign.' },
-    { name: '穷奇', nameEn: 'Qiongqi', file: '鬼/穷奇.png', type: 'thin', speed: 2.22, fire: 3, desc: '凶性外露，判断失误时最容易被它扑出门。', descEn: 'Ferocious and direct. One bad read can let it burst out.' },
-    { name: '饕餮', nameEn: 'Taotie', file: '鬼/饕餮.png', type: 'heavy', speed: 1.32, fire: 3, desc: '贪婪巨口，虽然笨重，但存在感异常强烈。', descEn: 'A greedy maw. Slow and heavy, but impossible to ignore.' },
-    { name: '狰', nameEn: 'Zheng', file: '鬼/狰.png', type: 'normal', speed: 1.70, fire: 3, desc: '神情凶狠，常常伴着成群鬼火一起出现。', descEn: 'A fierce presence, often surrounded by ghost fire.' },
-    { name: '烛阴', nameEn: 'Zhuyin', file: '鬼/烛阴.png', type: 'thin', speed: 2.45, fire: 3, foresight: true, bossLike: true, rareNormal: true, desc: '极少现身的强大妖怪，更接近Boss。封印后会发动「烛照未来」，短暂照见后面几扇门。', descEn: 'A rare, boss-like spirit. Sealing it triggers Foresight, briefly revealing several future doors.' }
+    { name: '猼訑', nameEn: 'Botuo', file: '鬼/猼訑.png', sealFile: '封印鬼/猼訑.png', type: 'normal', speed: 1.28, fire: 2, desc: '警觉又狡猾，喜欢躲在门后观察人。', descEn: 'Alert and cunning. It likes watching people from behind the door.' },
+    { name: '赤鱬', nameEn: 'Chiru', file: '鬼/赤鱬.png', sealFile: '封印鬼/赤鱬.png', type: 'thin', speed: 2.08, fire: 2, desc: '细长灵活，动作很快，最擅长突然贴近。', descEn: 'Slim, agile, and fast. It is good at suddenly closing the distance.' },
+    { name: '当康', nameEn: 'Dangkang', file: '鬼/康当.png', sealFile: '封印鬼/当康.png', type: 'heavy', speed: 1.05, fire: 2, desc: '体型敦实，压迫感强，逼近时像重物挪动。', descEn: 'Heavy and solid. Its approach feels like something massive shifting forward.' },
+    { name: '混沌', nameEn: 'Hundun', file: '鬼/混沌.png', sealFile: '封印鬼/混沌.png', type: 'heavy', speed: 0.72, fire: 3, desc: '轮廓混乱，越盯着看越分不清它的形状。', descEn: 'A chaotic silhouette. The longer you stare, the harder it is to read.' },
+    { name: '九尾狐', nameEn: 'Nine-tailed Fox', file: '鬼/九尾狐.png', sealFile: '封印鬼/九尾狐.png', type: 'normal', speed: 1.76, fire: 2, ghostEye: true, desc: '擅长迷惑视线。封印后会短暂开启鬼眼，看清当前门后的异常。', descEn: 'A master of deception. Sealing it briefly activates Ghost Eye, revealing the current door.' },
+    { name: '夔牛', nameEn: 'Kui Ox', file: '鬼/夔牛.png', sealFile: '封印鬼/夔牛.png', type: 'heavy', speed: 1.18, fire: 2, desc: '独脚震地，虽然不快，但每次靠近都很有压迫。', descEn: 'Not the fastest, but every step feels heavy and oppressive.' },
+    { name: '麒麟', nameEn: 'Qilin', file: '鬼/麒麟.png', sealFile: '封印鬼/麒麟.png', type: 'normal', speed: 1.42, fire: 2, desc: '外表庄重，但在门后出现时往往并不吉利。', descEn: 'It looks solemn, but seeing it behind the door is never a good sign.' },
+    { name: '穷奇', nameEn: 'Qiongqi', file: '鬼/穷奇.png', sealFile: '封印鬼/穷奇.png', type: 'thin', speed: 2.22, fire: 3, desc: '凶性外露，判断失误时最容易被它扑出门。', descEn: 'Ferocious and direct. One bad read can let it burst out.' },
+    { name: '饕餮', nameEn: 'Taotie', file: '鬼/饕餮.png', sealFile: '封印鬼/饕餮.png', type: 'heavy', speed: 1.32, fire: 3, desc: '贪婪巨口，虽然笨重，但存在感异常强烈。', descEn: 'A greedy maw. Slow and heavy, but impossible to ignore.' },
+    { name: '狰', nameEn: 'Zheng', file: '鬼/狰.png', sealFile: '封印鬼/狰.png', type: 'normal', speed: 1.70, fire: 3, desc: '神情凶狠，常常伴着成群鬼火一起出现。', descEn: 'A fierce presence, often surrounded by ghost fire.' },
+    { name: '烛阴', nameEn: 'Zhuyin', file: '鬼/烛阴.png', sealFile: '封印鬼/烛阴.png', type: 'thin', speed: 2.45, fire: 3, foresight: true, bossLike: true, rareNormal: true, desc: '极少现身的强大妖怪，更接近Boss。封印后会发动「烛照未来」，短暂照见后面几扇门。', descEn: 'A rare, boss-like spirit. Sealing it triggers Foresight, briefly revealing several future doors.' }
   ];
 
   const PEOPLE = [
@@ -54,6 +54,50 @@
     { name: '猫头鹰', nameEn: 'Owl', file: '小动物/猫头鹰.png', scale: 0.80, galleryScale: 1.08, gameScale: 0.78, gameOffsetX: 0.22, gameOffsetY: -0.18, desc: '眼神很怪，但目前安全。', descEn: 'Its eyes are strange, but it is safe.' },
     { name: '鸭子', nameEn: 'Duck', file: '小动物/鸭子.png', scale: 0.80, desc: '普通小动物，不需要封印。', descEn: 'A normal animal. Do not seal it.' }
   ];
+
+  const PETS = [
+    {
+      id: 'rabbit',
+      animalName: '兔子',
+      name: '兔子',
+      nameEn: 'Rabbit',
+      forms: ['普通兔子', '符火兔', '月白灵兔'],
+      formsEn: ['Rabbit', 'Talisman Rabbit', 'Moonlit Rabbit'],
+      formNotes: ['刚结缘的小伙伴', '耳尖浮起符火', '月白光环护门'],
+      formNotesEn: ['New little ally', 'Talisman fire on its ears', 'Moonlight ring guards doors'],
+      skill: '危急时自动帮你关门一次',
+      skillEn: 'Closes the door once when danger is critical',
+      tint: '#f7f7ff'
+    },
+    {
+      id: 'dog',
+      animalName: '小狗',
+      name: '小狗',
+      nameEn: 'Dog',
+      forms: ['普通小狗', '镇魂铃犬', '守门灵犬'],
+      formsEn: ['Dog', 'Bell Dog', 'Gatekeeper Dog'],
+      formNotes: ['会陪你巡门', '镇魂铃提前响动', '披上守门小披风'],
+      formNotesEn: ['Patrols with you', 'Soul bell rings early', 'Wears a gatekeeper cape'],
+      skill: '遇鬼时更早响铃预警',
+      skillEn: 'Rings early when a ghost is behind the door',
+      tint: '#fff3d6'
+    },
+    {
+      id: 'owl',
+      animalName: '猫头鹰',
+      name: '猫头鹰',
+      nameEn: 'Owl',
+      forms: ['普通猫头鹰', '灵眼鸮', '观门灵鸮'],
+      formsEn: ['Owl', 'Spirit-eyed Owl', 'Door-seeing Owl'],
+      formNotes: ['安静观察门缝', '眼中浮起灵光', '翼间出现观门眼纹'],
+      formNotesEn: ['Watches door cracks', 'Spirit light in its eyes', 'Eye marks spread on its wings'],
+      skill: '隔几门提前感知异常',
+      skillEn: 'Senses abnormal doors every few rooms',
+      tint: '#e9f6ff'
+    }
+  ];
+
+  const PET_XP_LEVELS = [0, 2, 5];
 
   const GHOST_FIRE_FILES = [
     '鬼火/鬼火1.png',
@@ -183,6 +227,9 @@
     evolutionOptions: [],
     evolutionHistory: [],
     lastEvolution: null,
+    petRun: { rabbitUsed: false, dogWarned: false },
+    petFx: null,
+    runRewards: emptyRunRewards(),
     testMode: false,
     testZhuyinUsed: false,
     menuHold: null,
@@ -215,6 +262,10 @@
     galleryDragging: false,
     galleryDragStartY: 0,
     galleryDragStartScroll: 0,
+    petScroll: 0,
+    petDragging: false,
+    petDragStartY: 0,
+    petDragStartScroll: 0,
     rulesScroll: 0,
     rulesDragging: false,
     rulesDragStartY: 0,
@@ -235,10 +286,32 @@
       const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('next_room_v01111_save') || '';
       if (!raw) throw new Error('no save');
       const data = JSON.parse(raw);
-      return { bestRoom: Number(data.bestRoom || 1), ghosts: data.ghosts || {}, people: data.people || {} };
+      return normalizeSave(data);
     } catch (e) {
-      return { bestRoom: 1, ghosts: {}, people: {} };
+      return normalizeSave({});
     }
+  }
+
+  function normalizeSave(data) {
+    const pets = {};
+    PETS.forEach(p => {
+      const old = data.pets && data.pets[p.id] ? data.pets[p.id] : {};
+      pets[p.id] = {
+        met: !!old.met,
+        xp: Math.max(0, Number(old.xp || 0))
+      };
+    });
+    const activePet = PETS.some(p => p.id === data.activePet) ? data.activePet : '';
+    return {
+      bestRoom: Number(data.bestRoom || 1),
+      ghosts: data.ghosts || {},
+      people: data.people || {},
+      pets,
+      activePet,
+      petHouseSeen: !!data.petHouseSeen,
+      spirit: Math.max(0, Number(data.spirit || 0)),
+      talismanDust: Math.max(0, Number(data.talismanDust || 0))
+    };
   }
 
   function saveGame() {
@@ -253,6 +326,132 @@
   function ui(zh, en) { return isEn() ? en : zh; }
   function displayName(item) { return isEn() ? (item.nameEn || item.name) : item.name; }
   function displayDesc(item) { return isEn() ? (item.descEn || item.desc || 'No record yet.') : (item.desc || '暂无记录'); }
+
+  function petById(id) { return PETS.find(p => p.id === id) || null; }
+  function petForAnimal(name) { return PETS.find(p => p.animalName === name) || null; }
+  function petSave(id) {
+    if (!state.save.pets) state.save.pets = {};
+    if (!state.save.pets[id]) state.save.pets[id] = { met: false, xp: 0 };
+    return state.save.pets[id];
+  }
+  function petLevel(id) {
+    const p = petSave(id);
+    if (!p.met) return 0;
+    if (p.xp >= PET_XP_LEVELS[2]) return 3;
+    if (p.xp >= PET_XP_LEVELS[1]) return 2;
+    return 1;
+  }
+  function activePet() { return petById(state.save.activePet); }
+  function activePetLevel() {
+    const p = activePet();
+    return p ? petLevel(p.id) : 0;
+  }
+  function petFormName(p) {
+    const level = petLevel(p.id);
+    return petFormNameAtLevel(p, level);
+  }
+  function petFormNameAtLevel(p, level) {
+    const idx = clamp((level || 1) - 1, 0, 2);
+    return isEn() ? p.formsEn[idx] : p.forms[idx];
+  }
+  function petFormNoteAtLevel(p, level) {
+    const idx = clamp((level || 1) - 1, 0, 2);
+    return isEn() ? p.formNotesEn[idx] : p.formNotes[idx];
+  }
+  function petXpToNext(id) {
+    const level = petLevel(id);
+    if (level <= 0) return PET_XP_LEVELS[1];
+    if (level >= 3) return 0;
+    return PET_XP_LEVELS[level] - petSave(id).xp;
+  }
+  function emptyRunRewards() {
+    return {
+      passedDoors: 0,
+      spirit: 0,
+      talismanDust: 0,
+      newPets: [],
+      petXp: {},
+      petEvolutions: [],
+      petTriggers: { rabbit: 0, dog: 0, owl: 0 }
+    };
+  }
+  function befriendPetByAnimal(person) {
+    const pet = petForAnimal(person && person.name);
+    if (!pet) return false;
+    const ps = petSave(pet.id);
+    const first = !ps.met;
+    const beforeLevel = petLevel(pet.id);
+    ps.met = true;
+    const gain = first ? 2 : 1;
+    ps.xp += gain;
+    const afterLevel = petLevel(pet.id);
+    state.runRewards.petXp[pet.id] = (state.runRewards.petXp[pet.id] || 0) + gain;
+    if (first && !state.runRewards.newPets.includes(pet.id)) state.runRewards.newPets.push(pet.id);
+    if (afterLevel > beforeLevel) {
+      state.runRewards.petEvolutions.push({ id: pet.id, from: beforeLevel || 1, to: afterLevel });
+      triggerPetFx(pet.id, 'evolve', afterLevel);
+    }
+    state.save.activePet = state.save.activePet || pet.id;
+    saveGame();
+    setToast(first
+      ? ui(`与${pet.name}结缘了`, `${pet.nameEn} joined you`)
+      : ui(`${pet.name}经验+1`, `${pet.nameEn} XP +1`), 1.6);
+    return true;
+  }
+  function maybeOwlSense(content) {
+    const pet = activePet();
+    const level = activePetLevel();
+    if (!pet || pet.id !== 'owl' || level <= 0 || !content) return;
+    const gap = [0, 5, 4, 3][level] || 5;
+    if (state.room <= 1 || state.room % gap !== 0) return;
+    const text = content.type === 'ghost' || content.type === 'boss'
+      ? ui('猫头鹰凝视：门后有异常', 'Owl gaze: abnormal presence')
+      : ui('猫头鹰凝视：这门很安静', 'Owl gaze: quiet door');
+    state.runRewards.petTriggers.owl += 1;
+    triggerPetFx('owl', content.type === 'ghost' || content.type === 'boss' ? 'owl-danger' : 'owl-safe', level);
+    setToast(text, 1.8);
+  }
+  function maybeDogWarn(content) {
+    const pet = activePet();
+    const level = activePetLevel();
+    if (!pet || pet.id !== 'dog' || level <= 0 || state.petRun.dogWarned) return;
+    if (!content || (content.type !== 'ghost' && content.type !== 'boss')) return;
+    if (state.door <= [0, 0.10, 0.075, 0.045][level]) return;
+    state.petRun.dogWarned = true;
+    state.runRewards.petTriggers.dog += 1;
+    triggerPetFx('dog', 'dog-warn', level);
+    setToast(ui('镇魂铃响：门后有鬼', 'Bell rings: ghost behind the door'), 1.4);
+  }
+  function maybeRabbitSave() {
+    const pet = activePet();
+    const level = activePetLevel();
+    if (!pet || pet.id !== 'rabbit' || level <= 0 || state.petRun.rabbitUsed) return false;
+    const threshold = [0, 0.92, 0.86, 0.78][level] || 0.92;
+    if (state.danger < threshold) return false;
+    state.petRun.rabbitUsed = true;
+    state.door = Math.max(0, state.door - [0, 0.28, 0.42, 0.58][level]);
+    state.danger = Math.max(0, state.danger - [0, 0.30, 0.45, 0.62][level]);
+    state.snapTarget = 0;
+    state.runRewards.petTriggers.rabbit += 1;
+    triggerPetFx('rabbit', 'rabbit-save', level);
+    setToast(ui('月兔急避：帮你拉回了门', 'Rabbit dash: door pulled back'), 1.5);
+    return true;
+  }
+  function triggerPetFx(petId, kind, level) {
+    state.petFx = { petId, kind, level: level || 1, timer: 1.0, duration: kind === 'evolve' ? 1.25 : 1.0 };
+  }
+  function rewardRoomClear() {
+    state.save.spirit = Math.max(0, Number(state.save.spirit || 0)) + 1;
+    state.runRewards.passedDoors += 1;
+    state.runRewards.spirit += 1;
+    saveGame();
+  }
+  function rewardSealSuccess(content) {
+    const count = content && content.ghosts ? content.ghosts.length : 1;
+    state.save.talismanDust = Math.max(0, Number(state.save.talismanDust || 0)) + count;
+    state.runRewards.talismanDust += count;
+    saveGame();
+  }
 
   function assetCandidateUrls(file) {
     const urls = [];
@@ -306,6 +505,7 @@
       ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.seal, ROOM_ASSETS.talisman,
       ...GHOST_FIRE_FILES,
       ...GHOSTS.map(g => g.file),
+      ...GHOSTS.map(g => g.sealFile).filter(Boolean),
       ...PEOPLE.map(p => p.file)
     ]));
   }
@@ -691,9 +891,11 @@
     state.snapTarget = null;
     state.draggingDoor = false;
     state.danger = 0;
+    state.petRun.dogWarned = false;
     state.transition = 0;
     state.corridorOffset = 0;
     state.content = takeContentForRoom(state.room);
+    maybeOwlSense(state.content);
   }
 
   function startRun(difficulty, testMode = false) {
@@ -719,6 +921,9 @@
     state.evolutionOptions = [];
     state.evolutionHistory = [];
     state.lastEvolution = null;
+    state.petRun = { rabbitUsed: false, dogWarned: false };
+    state.petFx = null;
+    state.runRewards = emptyRunRewards();
     state.toast = null;
     state.resultReason = '';
     createContent();
@@ -1230,6 +1435,7 @@
     state.audio.doorWasMoving = false;
     state.audio.lastDoor = 0;
     state.save.bestRoom = Math.max(state.save.bestRoom || 1, toRoom);
+    rewardRoomClear();
     saveGame();
   }
 
@@ -1329,11 +1535,12 @@
     }
 
     c.sealed += 1;
-    c.talismans.push(randomTalisman());
+    c.talismans.push(randomTalisman(true));
     state.sealFlash = 0.01;
 
     if (c.sealed >= c.requiredSeals) {
       playSealSuccessSfx();
+      rewardSealSuccess(c);
       const hasZhuyin = c.ghosts.some(isZhuyin);
       c.ghosts.forEach(g => {
         if (g.ghostEye) {
@@ -1345,6 +1552,7 @@
 
       state.mode = 'sealSuccess';
       state.pendingNextRoom = state.room + 1;
+      c.sealRevealBorn = state.t;
 
       // 烛阴极少出现在普通门中；一旦封印，必定发动「烛照未来」。
       if (hasZhuyin) {
@@ -1364,6 +1572,10 @@
     state.sealFlash = 0.01;
     if (c.hits >= c.cfg.seals) {
       playSealSuccessSfx();
+      const bossDust = Math.max(3, c.stage + 2);
+      state.save.talismanDust = Math.max(0, Number(state.save.talismanDust || 0)) + bossDust;
+      state.runRewards.talismanDust += bossDust;
+      saveGame();
       state.bossDefeated[c.stage] = true;
       state.pendingNextRoom = c.stage * 25 + 1;
       state.evolutionOptions = generateEvolutionOptions(c.stage);
@@ -1380,8 +1592,14 @@
     }
   }
 
-  function randomTalisman() {
-    return { rx: 0.18 + Math.random() * 0.64, ry: 0.14 + Math.random() * 0.68, rot: (Math.random() - 0.5) * 0.7, scale: 0.72 + Math.random() * 0.38, born: state.t };
+  function randomTalisman(avoidSealMark = false) {
+    const make = () => ({ rx: 0.18 + Math.random() * 0.64, ry: 0.14 + Math.random() * 0.68, rot: (Math.random() - 0.5) * 0.7, scale: 0.72 + Math.random() * 0.38, born: state.t });
+    if (!avoidSealMark) return make();
+    for (let i = 0; i < 10; i++) {
+      const t = make();
+      if (t.rx < 0.28 || t.rx > 0.72 || t.ry > 0.47) return t;
+    }
+    return { rx: Math.random() < 0.5 ? 0.20 + Math.random() * 0.08 : 0.72 + Math.random() * 0.08, ry: 0.42 + Math.random() * 0.34, rot: (Math.random() - 0.5) * 0.7, scale: 0.72 + Math.random() * 0.38, born: state.t };
   }
 
   function update(dt) {
@@ -1416,6 +1634,10 @@
     if (state.toast) {
       state.toast.time -= dt;
       if (state.toast.time <= 0) state.toast = null;
+    }
+    if (state.petFx) {
+      state.petFx.timer -= dt;
+      if (state.petFx.timer <= 0) state.petFx = null;
     }
     if (state.ghostEye > 0 && state.screen === 'game') state.ghostEye = Math.max(0, state.ghostEye - dt);
     if (state.eyeFx > 0 && state.screen === 'game') state.eyeFx = Math.max(0, state.eyeFx - dt);
@@ -1457,8 +1679,10 @@
     if (state.mode === 'bossFight') return updateBossFight(dt);
 
     if (c.type === 'ghost') {
+      maybeDogWarn(c);
       if (state.door > 0.055) {
-        const base = 0.62 + Math.min(state.room, 90) * 0.0066;
+        const newbieEase = state.room <= 3 ? 0.64 : state.room <= 6 ? 0.84 : 1;
+        const base = (0.62 + Math.min(state.room, 90) * 0.0066) * newbieEase;
         const speediest = Math.max(...c.ghosts.map(ghostDangerSpeed));
         const multi = 1 + (c.ghosts.length - 1) * 0.34;
         const easySlow = state.difficulty === 'easy' && c.ghosts.some(g => g.type === 'thin') ? 0.92 : 1;
@@ -1468,12 +1692,17 @@
       } else {
         state.danger = 0;
       }
+      if (maybeRabbitSave()) return;
       if (state.danger >= 1) gameOver('门开太久，鬼冲出来了');
     } else if (c.type === 'person' || c.type === 'empty') {
       if (state.door >= 0.92) {
         c.passTimer += dt;
         // 多停一瞬间，让玩家感到“看清并通过”，不是门突然合上切走。
-        if (c.passTimer > 0.14) startCorridorAdvance(state.room + 1);
+        const passDelay = c.type === 'person' ? 0.45 : 0.18;
+        if (c.passTimer > passDelay) {
+          if (c.type === 'person') befriendPetByAnimal(c.person);
+          startCorridorAdvance(state.room + 1);
+        }
       } else {
         c.passTimer = 0;
       }
@@ -1510,6 +1739,7 @@
     if (state.screen === 'difficulty') return handleDifficultyDown(p);
     if (state.screen === 'rules') return handleRulesDown(p);
     if (state.screen === 'gallery') return handleGalleryDown(p);
+    if (state.screen === 'pets') return handlePetsDown(p);
     if (state.screen === 'evolution') return handleEvolutionDown(p);
     if (state.screen === 'result') return handleResultDown(p);
     if (state.screen !== 'game') return;
@@ -1580,6 +1810,12 @@
       return;
     }
 
+    if (state.screen === 'pets' && state.petDragging) {
+      e.preventDefault();
+      state.petScroll = clamp(state.petDragStartScroll + (state.petDragStartY - p.y), 0, maxPetScroll());
+      return;
+    }
+
     if (!state.draggingDoor || state.screen !== 'game' || state.mode !== 'normal') return;
     e.preventDefault();
     const l = state.layout;
@@ -1606,6 +1842,7 @@
     state.pressed = null;
     if (state.rulesDragging) state.rulesDragging = false;
     if (state.galleryDragging) state.galleryDragging = false;
+    if (state.petDragging) state.petDragging = false;
     if (state.draggingDoor) {
       state.draggingDoor = false;
       state.snapTarget = state.door > 0.46 ? 1 : 0;
@@ -1623,6 +1860,9 @@
     } else if (state.screen === 'gallery') {
       e.preventDefault();
       state.galleryScroll = clamp(state.galleryScroll + e.deltaY, 0, maxGalleryScroll());
+    } else if (state.screen === 'pets') {
+      e.preventDefault();
+      state.petScroll = clamp(state.petScroll + e.deltaY, 0, maxPetScroll());
     }
   }, { passive: false });
 
@@ -1634,8 +1874,9 @@
     const y = Math.max(l.h * 0.47, l.h * 0.17 + 238);
     return {
       start: { x, y, w: bw, h: bh },
-      rules: { x, y: y + 76, w: bw, h: bh },
-      gallery: { x, y: y + 152, w: bw, h: bh },
+      rules: { x, y: y + 70, w: bw, h: bh },
+      pets: { x, y: y + 140, w: bw, h: bh },
+      gallery: { x, y: y + 210, w: bw, h: bh },
       lang: { x: l.w - 82, y: 18, w: 64, h: 36 }
     };
   }
@@ -1655,6 +1896,12 @@
     } else if (hit(p, inflate(b.rules, 10))) {
       setPressed('rules');
       state.screen = 'rules';
+    } else if (hit(p, inflate(b.pets, 10))) {
+      setPressed('pets');
+      state.petScroll = 0;
+      state.save.petHouseSeen = true;
+      saveGame();
+      state.screen = 'pets';
     } else if (hit(p, inflate(b.gallery, 10))) {
       setPressed('gallery');
       state.lastScreen = 'menu';
@@ -1667,7 +1914,7 @@
   }
 
   function handleRulesDown(p) {
-    const back = { x: 16, y: 18, w: 70, h: 40 };
+    const back = backButtonRect();
     if (hit(p, inflate(back, 8))) {
       setPressed('back');
       state.screen = 'menu';
@@ -1684,7 +1931,7 @@
 
   function handleGalleryDown(p) {
     const l = state.layout;
-    const back = { x: 16, y: 18, w: 70, h: 40 };
+    const back = backButtonRect();
     if (hit(p, inflate(back, 8))) {
       setPressed('back');
       state.screen = state.lastScreen === 'game' ? 'game' : 'menu';
@@ -1709,6 +1956,54 @@
       state.galleryDragging = true;
       state.galleryDragStartY = p.y;
       state.galleryDragStartScroll = state.galleryScroll;
+    }
+  }
+
+  function petCardRects() {
+    const l = state.layout;
+    const margin = Math.max(18, l.w * 0.06);
+    const y = 126;
+    const h = Math.min(156, Math.max(136, l.h * 0.18));
+    return PETS.map((pet, i) => ({ pet, x: margin, y: y + i * (h + 14) - state.petScroll, w: l.w - margin * 2, h }));
+  }
+
+  function maxPetScroll() {
+    const l = state.layout;
+    const cardH = Math.min(156, Math.max(136, l.h * 0.18));
+    const contentH = PETS.length * (cardH + 14) - 14;
+    const viewH = l.h - 126 - 22;
+    return Math.max(0, contentH - viewH);
+  }
+
+  function handlePetsDown(p) {
+    const back = backButtonRect();
+    if (hit(p, inflate(back, 8))) {
+      setPressed('back');
+      state.screen = 'menu';
+      state.petDragging = false;
+      return;
+    }
+    const rects = petCardRects();
+    for (const r of rects) {
+      if (hit(p, inflate(r, 6))) {
+        const ps = petSave(r.pet.id);
+        if (ps.met) {
+          setPressed(`pet-${r.pet.id}`);
+          state.save.activePet = state.save.activePet === r.pet.id ? '' : r.pet.id;
+          saveGame();
+          setToast(state.save.activePet
+            ? ui(`${r.pet.name}出战`, `${r.pet.nameEn} selected`)
+            : ui('已取消出战', 'Pet unequipped'), 1.2);
+        } else {
+          setToast(ui('先在门后遇见它', 'Meet it behind a door first'), 1.2);
+        }
+        return;
+      }
+    }
+    if (p.y > 112) {
+      state.petDragging = true;
+      state.petDragStartY = p.y;
+      state.petDragStartScroll = state.petScroll;
     }
   }
 
@@ -1769,11 +2064,19 @@
     const l = state.layout;
     const bw = Math.min(260, l.w * 0.68);
     const x = (l.w - bw) / 2;
-    const again = { x, y: l.h * 0.58, w: bw, h: 58 };
-    const home = { x, y: l.h * 0.58 + 76, w: bw, h: 58 };
+    const baseY = resultButtonsY();
+    const again = { x, y: baseY, w: bw, h: 52 };
+    const pets = { x, y: baseY + 62, w: bw, h: 52 };
+    const home = { x, y: baseY + 124, w: bw, h: 52 };
     if (hit(p, inflate(again, 10))) {
       setPressed('again');
       startRun(state.difficulty);
+    } else if (hit(p, inflate(pets, 10))) {
+      setPressed('petsResult');
+      state.save.petHouseSeen = true;
+      saveGame();
+      state.petScroll = 0;
+      state.screen = 'pets';
     } else if (hit(p, inflate(home, 10))) {
       setPressed('homeResult');
       state.screen = 'menu';
@@ -1794,6 +2097,7 @@
       else if (state.screen === 'menu') drawMenu();
       else if (state.screen === 'rules') drawRules();
       else if (state.screen === 'gallery') drawGallery();
+      else if (state.screen === 'pets') drawPetHouse();
       else if (state.screen === 'evolution') drawEvolution();
       else if (state.screen === 'foresight') drawForesight();
       else if (state.screen === 'game') drawGame();
@@ -1907,6 +2211,8 @@
     drawMiniButton(b.lang, isEn() ? '中' : 'EN', 'lang');
     drawUIButton(b.start, isEn() ? 'Start' : '开始游戏', '', 'start');
     drawUIButton(b.rules, isEn() ? 'Rules' : '游戏规则', '', 'rules');
+    drawPetUnlockPulse(b.pets);
+    drawUIButton(b.pets, isEn() ? 'Spirit Pets' : '灵宠屋', petMenuSub(), 'pets');
     drawUIButton(b.gallery, isEn() ? `Archive ${collectCountText()}` : `图鉴 ${collectCountText()}`, '', 'gallery');
 
     ctx.save();
@@ -1914,7 +2220,7 @@
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(0,0,0,0.52)';
     ctx.font = '800 11px system-ui, sans-serif';
-    ctx.fillText(ui('长按开始游戏：烛阴测试模式', 'Hold Start: Zhuyin test mode'), l.w / 2, b.gallery.y + b.gallery.h + 28);
+    ctx.fillText(ui('长按开始游戏：烛阴测试模式', 'Hold Start: Zhuyin test mode'), l.w / 2, b.gallery.y + b.gallery.h + 26);
 
     if (state.menuHold && state.menuHold.active && isPressed('start')) {
       const ratio = clamp(state.menuHold.time / 1.15, 0, 1);
@@ -1963,6 +2269,17 @@
       if (img) ctx.drawImage(img, x - size / 2, y - size * 0.65, size, size * 1.28);
       else drawCodeGhostFire(x, y, size, 0.8);
     });
+    ctx.restore();
+  }
+
+  function drawPetUnlockPulse(r) {
+    if (!hasAnyPetMet() || state.save.petHouseSeen) return;
+    const p = 0.5 + Math.sin(state.t * 5.2) * 0.5;
+    ctx.save();
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.26 + p * 0.34;
+    roundRect(r.x - 8 - p * 4, r.y - 8 - p * 4, r.w + 16 + p * 8, r.h + 16 + p * 8, 22, false, true, 3);
     ctx.restore();
   }
 
@@ -2102,6 +2419,8 @@
     drawTopUI();
     drawGhostEyeFx();
     drawBottomControls();
+    drawActivePetCompanion();
+    drawPetFx();
     drawToast();
   }
 
@@ -2132,6 +2451,7 @@
     drawDoorFrame(l.hole);
     drawBossGlow(content, l.hole);
     drawDoorPanel(l.door, doorProgress);
+    drawSealedGhostImprint(content, l.door, doorProgress);
     drawDoorTalismans(content, l.door, doorProgress);
     drawSealSuccessGlow();
     drawDangerVignette();
@@ -2250,7 +2570,9 @@
       const px = door.x + door.w / 2 + door.w * (p.gameOffsetX || 0);
       const pfloor = floorY + door.h * (p.gameOffsetY || 0);
       const pHeight = door.h * 0.50 * (p.gameScale || 1);
-      drawCharacter(p, px, pfloor, pHeight, 'person', 1);
+      const pet = petForAnimal(p.name);
+      if (pet && petSave(pet.id).met) drawPetCharacter(pet, p, px, pfloor, pHeight, 'person', 1);
+      else drawCharacter(p, px, pfloor, pHeight, 'person', 1);
     } else if (content.type === 'ghost') {
       const count = content.ghosts.length;
       const approach = content === state.content ? ghostApproachStep() : 0;
@@ -2411,6 +2733,146 @@
     });
   }
 
+  function drawVermilionSealImage(img, x, y, w, h, alpha) {
+    if (!img) return false;
+    const pixelW = Math.max(1, Math.ceil(w));
+    const pixelH = Math.max(1, Math.ceil(h));
+    const off = drawVermilionSealImage.canvas || (drawVermilionSealImage.canvas = document.createElement('canvas'));
+    const octx = drawVermilionSealImage.ctx || (drawVermilionSealImage.ctx = off.getContext('2d'));
+    off.width = pixelW;
+    off.height = pixelH;
+    octx.clearRect(0, 0, pixelW, pixelH);
+    octx.globalCompositeOperation = 'source-over';
+    octx.globalAlpha = 1;
+    octx.filter = 'sepia(1) saturate(4.5) hue-rotate(-18deg) contrast(1.25) brightness(0.78)';
+    octx.drawImage(img, 0, 0, pixelW, pixelH);
+    octx.filter = 'none';
+    octx.globalCompositeOperation = 'source-atop';
+    octx.fillStyle = 'rgba(176,24,17,0.68)';
+    octx.fillRect(0, 0, pixelW, pixelH);
+    octx.globalCompositeOperation = 'source-over';
+
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.20;
+    ctx.shadowColor = 'rgba(163,22,15,0.55)';
+    ctx.shadowBlur = 7;
+    ctx.drawImage(off, x - 1.5, y + 1, w + 3, h + 2);
+    ctx.globalAlpha = alpha * 0.70;
+    ctx.shadowBlur = 0;
+    ctx.drawImage(off, x, y, w, h);
+    ctx.globalAlpha = alpha * 0.22;
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.drawImage(off, x + 1.2, y + 0.8, w, h);
+    ctx.restore();
+    return true;
+  }
+
+  function drawSealedGhostImprint(content, door, progress) {
+    if (!content || content.type !== 'ghost' || !content.ghosts || !content.ghosts.length) return;
+    if ((content.sealed || 0) < (content.requiredSeals || 1)) return;
+
+    const born = content.sealRevealBorn || state.t;
+    const age = Math.max(0, state.t - born);
+    const entering = easeInOut(clamp(age / 0.18, 0, 1));
+    const leaving = state.mode === 'sealSuccess' ? 1 : clamp(1 - age / 1.8, 0, 1);
+    const alpha = clamp(Math.max(entering, 0.36) * Math.max(leaving, 0.55), 0, 1);
+    if (alpha <= 0.02) return;
+
+    const d = actualDoorRectFor(door, progress);
+    const count = content.ghosts.length;
+    const name = count === 1
+      ? displayName(content.ghosts[0])
+      : content.ghosts.map(g => displayName(g)).join(' / ');
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(d.x + d.w * 0.05, d.y + d.h * 0.06, d.w * 0.90, d.h * 0.88);
+    ctx.clip();
+
+    const markW = d.w * (count === 1 ? 0.58 : 0.70);
+    const markH = d.h * 0.31;
+    const markX = d.x + d.w * 0.50 - markW / 2;
+    const markY = d.y + d.h * 0.14;
+    const pop = 0.96 + entering * 0.04;
+    const cxMark = markX + markW / 2;
+    const cyMark = markY + markH / 2;
+    const red = 'rgba(168,25,18,';
+    const darkRed = 'rgba(86,12,9,';
+
+    ctx.translate(cxMark, cyMark);
+    ctx.scale(pop, pop);
+    ctx.translate(-cxMark, -cyMark);
+
+    ctx.globalAlpha = alpha * 0.34;
+    ctx.strokeStyle = red + '0.72)';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(markX + markW * 0.16, markY + markH * 0.16);
+    ctx.quadraticCurveTo(markX + markW * 0.10, markY + markH * 0.28, markX + markW * 0.19, markY + markH * 0.34);
+    ctx.moveTo(markX + markW * 0.82, markY + markH * 0.12);
+    ctx.quadraticCurveTo(markX + markW * 0.90, markY + markH * 0.26, markX + markW * 0.80, markY + markH * 0.36);
+    ctx.moveTo(markX + markW * 0.35, markY + markH * 0.07);
+    ctx.lineTo(markX + markW * 0.47, markY + markH * 0.03);
+    ctx.moveTo(markX + markW * 0.55, markY + markH * 0.04);
+    ctx.lineTo(markX + markW * 0.68, markY + markH * 0.08);
+    ctx.stroke();
+
+    const iconAreaW = markW * 0.82;
+    const iconCenterY = markY + markH * 0.43;
+    content.ghosts.forEach((g, i) => {
+      const img = getAssetImage(g.sealFile || g.file);
+      const h = markH * (count === 1 ? 0.66 : 0.54);
+      const aspect = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 0.72;
+      const w = h * aspect;
+      const spread = iconAreaW / Math.max(1, count);
+      const cx = markX + markW / 2 + (count === 1 ? 0 : (i - (count - 1) / 2) * spread * 0.58);
+      const y = iconCenterY - h / 2;
+
+      ctx.save();
+      if (!drawVermilionSealImage(img, cx - w / 2, y, w, h, alpha)) {
+        ctx.globalAlpha = alpha * 0.78;
+        ctx.fillStyle = red + '0.92)';
+        ctx.strokeStyle = darkRed + '0.34)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, y + h * 0.50, w * 0.34, h * 0.40, -0.08, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = '900 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(displayName(g).slice(0, 3), cx, y + h * 0.52, w * 0.9);
+      }
+      ctx.restore();
+    });
+
+    ctx.globalAlpha = alpha * 0.96;
+    ctx.fillStyle = red + '0.94)';
+    ctx.strokeStyle = darkRed + '0.40)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = 'rgba(168,25,18,0.28)';
+    ctx.shadowBlur = 2;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = count === 1 ? '900 14px system-ui, sans-serif' : '900 10px system-ui, sans-serif';
+    const tx = markX + markW / 2;
+    const ty = markY + markH * 0.84;
+    ctx.strokeText(name, tx, ty, markW * 0.88);
+    ctx.fillText(name, tx, ty, markW * 0.88);
+
+    ctx.globalAlpha = alpha * 0.44;
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = red + '0.72)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(markX + markW * 0.28, markY + markH * 0.94);
+    ctx.lineTo(markX + markW * 0.38, markY + markH * 0.98);
+    ctx.moveTo(markX + markW * 0.62, markY + markH * 0.98);
+    ctx.lineTo(markX + markW * 0.73, markY + markH * 0.94);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawSealPaper(x, y, w, h, rot, alpha) {
     ctx.save();
     ctx.translate(x, y);
@@ -2520,7 +2982,7 @@
     ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${prog.boss.name}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), textX, 59, textMax);
 
     ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillText(ui(`妖变 ${activeEvolutionText()}`, `Mutations ${activeEvolutionText()}`), 16, 84, l.w - 32);
+    ctx.fillText(ui(`妖变 ${activeEvolutionText()}  灵宠 ${activePetTopText()}`, `Mutations ${activeEvolutionText()}  Pet ${activePetTopText()}`), 16, 84, l.w - 32);
 
     const barX = 16;
     const barY = l.topH - 16;
@@ -2616,6 +3078,87 @@
     ctx.restore();
   }
 
+  function drawActivePetCompanion() {
+    const pet = activePet();
+    const level = activePetLevel();
+    if (!pet || level <= 0 || state.screen !== 'game') return;
+    const l = state.layout;
+    const size = Math.min(72, Math.max(54, l.w * 0.13));
+    const r = { x: 18, y: l.gameBottom - size - 12, w: size, h: size };
+    ctx.save();
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    roundRect(r.x, r.y, r.w, r.h, 16, true, true, 3);
+    drawPetPortrait(pet, { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: r.h - 8 });
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 10px system-ui, sans-serif';
+    ctx.fillText(`Lv${level}`, r.x + r.w / 2, r.y + r.h - 8);
+    ctx.restore();
+  }
+
+  function drawPetFx() {
+    const fx = state.petFx;
+    if (!fx) return;
+    const l = state.layout;
+    const p = clamp(fx.timer / Math.max(0.1, fx.duration || 1), 0, 1);
+    const rise = 1 - p;
+    ctx.save();
+    if (fx.kind === 'rabbit-save' || fx.kind === 'evolve') {
+      ctx.globalAlpha = p * 0.72;
+      ctx.fillStyle = 'rgba(255,255,255,0.72)';
+      ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
+      const cx = l.door.x + l.door.w / 2;
+      const cy = l.door.y + l.door.h * 0.42;
+      ctx.strokeStyle = '#111';
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 7; i++) {
+        const a = state.t * 4 + i * Math.PI * 2 / 7;
+        const rr = l.door.w * (0.24 + rise * 0.30);
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.55, 8 + fx.level * 2, 15 + fx.level * 3, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (fx.kind === 'dog-warn') {
+      const cx = l.door.x + l.door.w * 0.82;
+      const cy = l.door.y + l.door.h * 0.35;
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = p;
+      for (let i = 0; i < 3; i++) {
+        const rr = l.door.w * (0.08 + rise * 0.26 + i * 0.07);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, -0.9, 0.9);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#fff3d6';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10 + fx.level * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (fx.kind === 'owl-danger' || fx.kind === 'owl-safe') {
+      const cx = l.w / 2;
+      const cy = l.topH - 34;
+      ctx.globalAlpha = p * 0.92;
+      ctx.strokeStyle = fx.kind === 'owl-danger' ? '#111' : 'rgba(0,0,0,0.62)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx - 48, cy);
+      ctx.quadraticCurveTo(cx, cy - 24 - rise * 12, cx + 48, cy);
+      ctx.quadraticCurveTo(cx, cy + 24 + rise * 12, cx - 48, cy);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10 + fx.level * 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawGhostEyeFx() {
     if (state.eyeFx <= 0) return;
     const l = state.layout;
@@ -2674,7 +3217,13 @@
       '鬼眼开启：10秒透视': 'Ghost Eye: 10 seconds of vision.',
       '符咒贴上去了': 'Seal placed.',
       'Boss已封印，进入下一大关': 'Boss sealed. Next stage unlocked.',
-      'Boss逃走了': 'Boss escaped.'
+      'Boss逃走了': 'Boss escaped.',
+      '猫头鹰凝视：门后有异常': 'Owl gaze: abnormal presence',
+      '猫头鹰凝视：这门很安静': 'Owl gaze: quiet door',
+      '镇魂铃响：门后有鬼': 'Bell rings: ghost behind the door',
+      '月兔急避：帮你拉回了门': 'Rabbit dash: door pulled back',
+      '已取消出战': 'Pet unequipped',
+      '先在门后遇见它': 'Meet it behind a door first'
     };
     return map[zh] || zh;
   }
@@ -2694,22 +3243,24 @@
       '3. Ghosts have different speeds. If you stare too long, they will step closer and burst out.',
       '4. For normal ghosts, close the door first, then tap Seal.',
       '5. If there is an animal or an empty room, open the door wide enough to pass. Sealing them ends the run.',
-      '6. Sealing the Nine-tailed Fox opens Ghost Eye for 10 seconds.',
-      '7. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
-      '8. After each Boss, choose one mutation to seal. The other one takes effect.',
-      '9. Zhuyin is a rare boss-like spirit. Sealing it briefly reveals future doors.',
-      '10. The Archive records ghosts and animals you have seen.'
+      '6. Passing animals can befriend spirit pets. Equip one in Spirit Pets before the next run.',
+      '7. Spirit pets evolve through repeated encounters and gain visible new forms.',
+      '8. Sealing the Nine-tailed Fox opens Ghost Eye for 10 seconds.',
+      '9. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
+      '10. After each Boss, choose one mutation to seal. The other one takes effect.',
+      '11. Zhuyin is a rare boss-like spirit. Sealing it briefly reveals future doors.'
     ] : [
       '1. 拖动红木滑门向左开门，松手后会自动吸附开/关。',
       '2. 判断成功后，当前门位会横向滑走，新的门从长廊另一侧滑入。',
       '3. 鬼有快慢差异，看太久会一段段逼近，危险值满了就会冲出来。',
       '4. 普通鬼需要先关门，再点击封印。',
       '5. 门后是小动物或空房间时，开到足够大即可通过；乱封会直接失败。',
-      '6. 封印九尾狐后开启10秒鬼眼，门会变透明。',
-      '7. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
-      '8. 每次打败Boss后会出现妖怪进化二选一：你封印其中一个，另一个会生效。',
-      '9. 烛阴是极少现身的Boss级妖怪，封印后会短暂照见未来几扇门。',
-      '10. 图鉴会记录见过的鬼和小动物，可以上下滑动查看。'
+      '6. 通过小动物房间会结缘灵宠，重复遇见会获得经验并进化。',
+      '7. 灵宠会改变外观并提供技能，可在灵宠屋选择1只出战。',
+      '8. 封印九尾狐后开启10秒鬼眼，门会变透明。',
+      '9. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
+      '10. 每次打败Boss后会出现妖怪进化二选一：你封印其中一个，另一个会生效。',
+      '11. 烛阴是极少现身的Boss级妖怪，封印后会短暂照见未来几扇门。'
     ];
   }
 
@@ -2831,6 +3382,184 @@
     const desc = seen ? displayDesc(item) : ui('尚未记录', 'Not recorded yet');
     wrapText(desc, r.x + r.w / 2, r.y + r.h - (isEn() ? 52 : 38), r.w - 14, isEn() ? 11 : 12, 'center');
     ctx.restore();
+  }
+
+  function drawPetCharacter(pet, def, x, floorY, targetH, kind, scale = 1) {
+    drawCharacter(def, x, floorY, targetH, kind, scale);
+    const level = petLevel(pet.id);
+    if (level <= 1) return;
+    drawPetFormEffects(pet, level, x, floorY - targetH * 0.42, targetH * scale);
+  }
+
+  function drawPetFormEffects(pet, level, cx, cy, size) {
+    if (level <= 1) return;
+    ctx.save();
+    const pulse = 0.5 + Math.sin(state.t * 4.2) * 0.5;
+    const s = Math.max(24, size);
+    ctx.globalAlpha = 0.72;
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = Math.max(2, s * 0.035);
+    ctx.beginPath();
+    ctx.arc(cx, cy, s * (level >= 3 ? 0.58 : 0.47), 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (pet.id === 'rabbit') {
+      ctx.fillStyle = level >= 3 ? 'rgba(235,242,255,0.92)' : 'rgba(255,255,255,0.86)';
+      for (let i = 0; i < (level >= 3 ? 5 : 3); i++) {
+        const a = state.t * 1.5 + i * Math.PI * 2 / (level >= 3 ? 5 : 3);
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * s * 0.45, cy + Math.sin(a) * s * 0.28, s * 0.07, s * 0.12, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (pet.id === 'dog') {
+      ctx.fillStyle = '#fff3d6';
+      ctx.beginPath();
+      ctx.arc(cx, cy - s * 0.43, s * (level >= 3 ? 0.14 : 0.10), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (level >= 3) {
+        ctx.beginPath();
+        ctx.moveTo(cx - s * 0.34, cy - s * 0.22);
+        ctx.lineTo(cx + s * 0.34, cy - s * 0.22);
+        ctx.lineTo(cx + s * 0.24, cy + s * 0.16);
+        ctx.lineTo(cx - s * 0.24, cy + s * 0.16);
+        ctx.closePath();
+        ctx.globalAlpha = 0.36 + pulse * 0.2;
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (pet.id === 'owl') {
+      ctx.fillStyle = level >= 3 ? 'rgba(220,246,255,0.86)' : 'rgba(255,255,255,0.82)';
+      [-1, 1].forEach(side => {
+        ctx.beginPath();
+        ctx.arc(cx + side * s * 0.22, cy - s * 0.20, s * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+      if (level >= 3) {
+        ctx.beginPath();
+        ctx.moveTo(cx - s * 0.52, cy + s * 0.02);
+        ctx.quadraticCurveTo(cx, cy - s * (0.40 + pulse * 0.08), cx + s * 0.52, cy + s * 0.02);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawPetHouse() {
+    const l = state.layout;
+    state.petScroll = clamp(state.petScroll, 0, maxPetScroll());
+    drawMenuBackground();
+    drawBackButton();
+
+    ctx.save();
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 30px system-ui, sans-serif';
+    ctx.fillText(ui('灵宠屋', 'Spirit Pets'), l.w / 2, 42);
+    ctx.font = '800 12px system-ui, sans-serif';
+    ctx.fillText(ui(`灵火 ${state.save.spirit || 0}  符纸碎片 ${state.save.talismanDust || 0}`, `Spirit ${state.save.spirit || 0}  Dust ${state.save.talismanDust || 0}`), l.w / 2, 72);
+    ctx.font = '700 11px system-ui, sans-serif';
+    ctx.fillText(ui('点击已结缘灵宠切换出战', 'Tap a met pet to equip'), l.w / 2, 94);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 112, l.w, l.h - 112);
+    ctx.clip();
+    petCardRects().forEach(r => {
+      if (r.y > l.h || r.y + r.h < 108) return;
+      drawPetCard(r, r.pet);
+    });
+    ctx.restore();
+  }
+
+  function drawPetCard(r, pet) {
+    const ps = petSave(pet.id);
+    const met = !!ps.met;
+    const level = petLevel(pet.id);
+    const active = state.save.activePet === pet.id;
+
+    drawPressTransform(r, `pet-${pet.id}`, () => {
+      ctx.fillStyle = active ? '#111' : '#fffdf6';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 4;
+      roundRect(r.x, r.y, r.w, r.h, 18, true, true, 4);
+
+      const portrait = { x: r.x + 14, y: r.y + 14, w: Math.min(104, r.h - 28), h: r.h - 28 };
+      ctx.save();
+      ctx.fillStyle = active ? '#fffdf6' : pet.tint;
+      roundRect(portrait.x, portrait.y, portrait.w, portrait.h, 14, true, false, 0);
+      if (met) drawPetPortrait(pet, portrait);
+      else drawUnknownEgg(portrait, portrait.w);
+      ctx.restore();
+
+      const tx = portrait.x + portrait.w + 16;
+      const tw = r.x + r.w - tx - 16;
+      ctx.fillStyle = active ? '#fffdf6' : '#111';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.font = '900 19px system-ui, sans-serif';
+      ctx.fillText(met ? petFormName(pet) : ui('尚未结缘', 'Not met'), tx, r.y + 18, tw);
+      ctx.font = '800 12px system-ui, sans-serif';
+      ctx.fillText(met ? ui(`等级 ${level}  经验 ${ps.xp}`, `Lv ${level}  XP ${ps.xp}`) : ui(`在门后遇见${pet.name}`, `Find ${pet.nameEn} behind a door`), tx, r.y + 45, tw);
+      ctx.font = '700 12px system-ui, sans-serif';
+      wrapText(met ? petGrowthText(pet) : ui('结缘后可出战，经验足够会改变形态。', 'After meeting, it can evolve and join runs.'), tx, r.y + 68, tw, 15, 'left');
+      if (met) drawPetGrowthBar(tx, r.y + r.h - 42, tw, pet);
+      ctx.font = '900 12px system-ui, sans-serif';
+      const status = !met ? ui('未结缘', 'Locked') : active ? ui('出战中 · 点击取消', 'Equipped · tap to remove') : petXpToNext(pet.id) > 0 ? ui(`点击出战 · 距进化 ${petXpToNext(pet.id)} 经验`, `Tap to equip · ${petXpToNext(pet.id)} XP to evolve`) : ui('点击出战 · 最终形态', 'Tap to equip · final form');
+      ctx.fillText(status, tx, r.y + r.h - 24, tw);
+      if (active) drawEquippedBadge(r);
+    });
+  }
+
+  function drawEquippedBadge(r) {
+    const text = ui('出战', 'ON');
+    ctx.save();
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    const w = isEn() ? 38 : 46;
+    const b = { x: r.x + r.w - w - 12, y: r.y + 12, w, h: 25 };
+    roundRect(b.x, b.y, b.w, b.h, 10, true, true, 2);
+    ctx.fillStyle = '#111';
+    ctx.font = '900 12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2);
+    ctx.restore();
+  }
+
+  function petGrowthText(pet) {
+    const level = petLevel(pet.id);
+    const note = petFormNoteAtLevel(pet, level);
+    const next = level >= 3 ? ui('已到最终形态', 'Final form reached') : ui(`下一形态：${petFormNameAtLevel(pet, level + 1)}`, `Next: ${petFormNameAtLevel(pet, level + 1)}`);
+    return `${note} · ${next}`;
+  }
+
+  function drawPetGrowthBar(x, y, w, pet) {
+    const ps = petSave(pet.id);
+    const level = petLevel(pet.id);
+    const min = PET_XP_LEVELS[level - 1] || 0;
+    const max = level >= 3 ? PET_XP_LEVELS[2] : PET_XP_LEVELS[level];
+    const ratio = level >= 3 ? 1 : clamp((ps.xp - min) / Math.max(1, max - min), 0, 1);
+    ctx.save();
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    roundRect(x, y, w, 10, 5, true, true, 2);
+    ctx.fillStyle = '#111';
+    roundRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), 6, 4, true, false, 0);
+    ctx.restore();
+  }
+
+  function drawPetPortrait(pet, box) {
+    const def = PEOPLE.find(p => p.name === pet.animalName);
+    const level = petLevel(pet.id);
+    if (def) drawCardImage(def, box);
+    drawPetFormEffects(pet, level, box.x + box.w / 2, box.y + box.h * 0.58, Math.min(box.w, box.h) * 0.74);
   }
 
   function drawCardImage(item, box) {
@@ -2957,23 +3686,67 @@
     ctx.save();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fffdf6';
-    roundRect(l.w * 0.08, l.h * 0.22, l.w * 0.84, l.h * 0.28, 24, true, true, 5);
+    const panel = { x: l.w * 0.07, y: Math.max(88, l.h * 0.14), w: l.w * 0.86, h: Math.min(390, l.h * 0.52) };
+    roundRect(panel.x, panel.y, panel.w, panel.h, 24, true, true, 5);
     ctx.fillStyle = '#111';
-    ctx.font = '900 38px system-ui, sans-serif';
-    ctx.fillText(ui('游戏结束', 'Game Over'), l.w / 2, l.h * 0.30);
-    ctx.font = '700 17px system-ui, sans-serif';
-    wrapText(resultText(state.resultReason), l.w / 2, l.h * 0.365, l.w * 0.72, 24, 'center');
-    ctx.font = '800 16px system-ui, sans-serif';
-    ctx.fillText(ui(`本次到达：第 ${state.room} 门`, `Reached Door ${state.room}`), l.w / 2, l.h * 0.445);
-    ctx.fillText(ui(`最高纪录：第 ${state.save.bestRoom || 1} 门`, `Best: Door ${state.save.bestRoom || 1}`), l.w / 2, l.h * 0.478);
+    ctx.font = '900 34px system-ui, sans-serif';
+    ctx.fillText(ui('游戏结束', 'Game Over'), l.w / 2, panel.y + 48);
+    ctx.font = '700 15px system-ui, sans-serif';
+    wrapText(resultText(state.resultReason), l.w / 2, panel.y + 78, panel.w - 48, 20, 'center');
+    ctx.font = '800 14px system-ui, sans-serif';
+    ctx.fillText(ui(`本次到达：第 ${state.room} 门  最高：第 ${state.save.bestRoom || 1} 门`, `Reached Door ${state.room}  Best ${state.save.bestRoom || 1}`), l.w / 2, panel.y + 124);
+
+    ctx.textAlign = 'left';
+    ctx.font = '900 15px system-ui, sans-serif';
+    ctx.fillText(ui('本局收获', 'Run Rewards'), panel.x + 28, panel.y + 158);
     ctx.font = '700 12px system-ui, sans-serif';
-    wrapText(ui(`本局妖变：${activeEvolutionText()}`, `Mutations: ${activeEvolutionText()}`), l.w / 2, l.h * 0.512, l.w * 0.72, 17, 'center');
+    let yy = panel.y + 182;
+    resultRewardLines().forEach(line => {
+      yy = wrapText(line, panel.x + 28, yy, panel.w - 56, 16, 'left') + 2;
+    });
+    ctx.textAlign = 'center';
+    ctx.font = '700 11px system-ui, sans-serif';
+    wrapText(ui(`本局妖变：${activeEvolutionText()}`, `Mutations: ${activeEvolutionText()}`), l.w / 2, panel.y + panel.h - 26, panel.w - 48, 15, 'center');
     ctx.restore();
 
     const bw = Math.min(260, l.w * 0.68);
     const x = (l.w - bw) / 2;
-    drawUIButton({ x, y: l.h * 0.58, w: bw, h: 58 }, ui('再来一局', 'Try Again'), '', 'again');
-    drawUIButton({ x, y: l.h * 0.58 + 76, w: bw, h: 58 }, ui('返回主页', 'Home'), '', 'homeResult');
+    const baseY = resultButtonsY();
+    drawUIButton({ x, y: baseY, w: bw, h: 52 }, ui('再来一局', 'Try Again'), '', 'again');
+    drawUIButton({ x, y: baseY + 62, w: bw, h: 52 }, ui('去灵宠屋', 'Spirit Pets'), '', 'petsResult');
+    drawUIButton({ x, y: baseY + 124, w: bw, h: 52 }, ui('返回主页', 'Home'), '', 'homeResult');
+  }
+
+  function resultButtonsY() {
+    const l = state.layout;
+    return Math.min(l.h - 176, Math.max(l.h * 0.66, l.h * 0.14 + Math.min(390, l.h * 0.52) + 22));
+  }
+
+  function resultRewardLines() {
+    const r = state.runRewards || emptyRunRewards();
+    const lines = [
+      ui(`通过房间：${r.passedDoors}  灵火 +${r.spirit}  符纸碎片 +${r.talismanDust}`, `Cleared: ${r.passedDoors}  Spirit +${r.spirit}  Dust +${r.talismanDust}`)
+    ];
+    if (r.newPets.length) {
+      lines.push(ui(`新结缘：${r.newPets.map(id => petById(id).name).join('、')}`, `New pets: ${r.newPets.map(id => petById(id).nameEn).join(', ')}`));
+    }
+    Object.keys(r.petXp).forEach(id => {
+      const pet = petById(id);
+      if (pet) lines.push(ui(`${pet.name}经验 +${r.petXp[id]}`, `${pet.nameEn} XP +${r.petXp[id]}`));
+    });
+    r.petEvolutions.forEach(e => {
+      const pet = petById(e.id);
+      if (pet) lines.push(ui(`进化成功：${pet.name} → ${petFormNameAtLevel(pet, e.to)}`, `Evolved: ${pet.nameEn} -> ${petFormNameAtLevel(pet, e.to)}`));
+    });
+    const triggers = [];
+    if (r.petTriggers.rabbit) triggers.push(ui(`兔子救门 ${r.petTriggers.rabbit}次`, `Rabbit saves ${r.petTriggers.rabbit}`));
+    if (r.petTriggers.dog) triggers.push(ui(`小狗预警 ${r.petTriggers.dog}次`, `Dog warnings ${r.petTriggers.dog}`));
+    if (r.petTriggers.owl) triggers.push(ui(`猫头鹰感知 ${r.petTriggers.owl}次`, `Owl senses ${r.petTriggers.owl}`));
+    if (triggers.length) lines.push(triggers.join('  '));
+    if (lines.length === 1 && r.passedDoors === 0 && r.spirit === 0 && r.talismanDust === 0) {
+      lines.push(ui('这局没有带回资源，再试一门就会有收获。', 'No rewards this run. Clear one door to bring something back.'));
+    }
+    return lines.slice(0, 7);
   }
 
   function resultText(zh) {
@@ -3003,7 +3776,11 @@
 
   function drawBackButton() {
     const label = state.screen === 'gallery' && state.lastScreen === 'game' ? ui('返回游戏', 'Back') : ui('返回', 'Back');
-    drawMiniButton({ x: 16, y: 18, w: 70, h: 40 }, label, 'back');
+    drawMiniButton(backButtonRect(), label, 'back');
+  }
+
+  function backButtonRect() {
+    return { x: 68, y: 18, w: 70, h: 40 };
   }
 
   function drawPressTransform(r, id, drawFn) {
@@ -3101,6 +3878,18 @@
     ctx.restore();
   }
 
+  function petMenuSub() {
+    const met = PETS.filter(p => petSave(p.id).met).length;
+    const p = activePet();
+    if (!p) return ui(`${met}/${PETS.length} 已结缘`, `${met}/${PETS.length} met`);
+    return ui(`${petFormName(p)}出战`, `${petFormName(p)} ready`);
+  }
+  function activePetTopText() {
+    const p = activePet();
+    if (!p) return ui('无', 'None');
+    return `${petFormName(p)} Lv${petLevel(p.id)}`;
+  }
+  function hasAnyPetMet() { return PETS.some(p => petSave(p.id).met); }
   function collectCountText() { return `${seenGhostCount() + seenPeopleCount()}/${GHOSTS.length + PEOPLE.length}`; }
   function seenGhostCount() { return GHOSTS.filter(g => state.save.ghosts[g.name]).length; }
   function seenPeopleCount() { return PEOPLE.filter(p => state.save.people[p.name]).length; }
