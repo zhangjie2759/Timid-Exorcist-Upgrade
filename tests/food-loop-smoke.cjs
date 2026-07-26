@@ -12,7 +12,9 @@ source = source.replace(/\}\)\(\);\s*$/, `
     rewardIngredientDrop, safeReturnHome, gameOver, recipeCount,
     sellPlatedDish, discardPlatedDish, useDailyActiveSkill,
     skillCooldownRemaining, generateDailyShopOffers, upgradeKitchenSlots,
-    normalizeSave, hasCarriedSkill, openRunPreparation
+    normalizeSave, hasCarriedSkill, openRunPreparation, openSkillShop,
+    startCorridorAdvance, finishCorridorAdvance, handleSealClick,
+    handleBossSealClick, finishKitchenDrag, resize, draw
   };
 })();`);
 
@@ -103,13 +105,20 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.19.0_kitchen_flow_loadout_chefs');
+assert.equal(api.VERSION, 'v0.20.0_single_door_eye_big_stove');
 assert.equal(api.INGREDIENTS.length, 4);
 assert.equal(api.RECIPES.length, 7);
 assert.equal(api.TEST_PANTRY_STOCK, 99);
 assert.equal(Math.min(...Object.values(api.state.save.pantry)), 99, 'test pantry starts full');
 assert.equal(api.normalizeSave({ kitchen: { slots: 2 } }).kitchen.slots, 3, 'old saves receive the three-slot cooking counter');
 assert.ok(api.PETS.every(pet => !pet.forms && pet.role), 'animal chefs no longer contain level or evolution forms');
+assert.ok(api.GHOSTS.every(ghost => !ghost.ghostEye && !ghost.foresight), 'sealed ghosts contain no skill-grant flags');
+
+api.state.kitchenSlots = [null, null, null, null];
+api.state.kitchenDrag = { id: 'tomato', moved: false };
+api.finishKitchenDrag({ x: 0, y: 0 });
+assert.equal(api.state.kitchenSlots[0], 'tomato', 'tap-to-place still fills the first open stove slot');
+api.state.kitchenSlots = [null, null, null, null];
 
 api.state.save.pantry.tomato = 1;
 api.state.save.pantry.egg = 1;
@@ -153,6 +162,11 @@ api.buyDailySkill(api.DAILY_SKILLS.find(skill => skill.id === 'ghostEyeSkill'));
 assert.deepEqual(Array.from(api.state.save.dailySkills.ids), ['freshSeal', 'preserveBag', 'ghostEyeSkill'], 'daily skills have no two-skill cap');
 assert.equal(api.state.save.coins, 560, 'skills use fixed listed prices');
 
+api.state.runLoadout = [];
+api.state.screen = 'game';
+api.state.mode = 'normal';
+assert.equal(api.useDailyActiveSkill('ghostEyeSkill'), false, 'an owned but uncarried active skill cannot be used');
+
 api.state.save.recipes.egg_rice = true;
 api.state.save.dailySkills.loadout = ['freshSeal', 'preserveBag', 'ghostEyeSkill'];
 api.openRunPreparation();
@@ -160,7 +174,16 @@ assert.deepEqual(Array.from(api.state.runLoadout), ['freshSeal', 'preserveBag', 
 api.startRun('normal');
 assert.equal(api.state.freshSeals, 1, 'Fresh Seal skill grants one charge per run');
 assert.equal(api.useDailyActiveSkill('ghostEyeSkill'), true, 'active skill can be used during a run');
-assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 4, 'active skill starts its per-run door cooldown');
+assert.equal(api.state.ghostEyeRoom, 1, 'Ghost Eye is bound to the activation room');
+assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 8, 'active skill starts its eight-door cooldown');
+api.startCorridorAdvance(2);
+assert.equal(api.state.ghostEyeRoom, 0, 'Ghost Eye ends as soon as the corridor advances');
+api.finishCorridorAdvance();
+for (let room = 3; room <= 9; room += 1) {
+  api.startCorridorAdvance(room);
+  api.finishCorridorAdvance();
+}
+assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 0, 'Ghost Eye is ready again after eight door advances');
 api.state.freshSealArmed = true;
 api.rewardIngredientDrop({ ghosts: [api.GHOSTS[0]] });
 assert.equal(api.state.freshSeals, 0, 'armed Fresh Seal consumes one charge');
@@ -178,6 +201,34 @@ assert.equal(api.state.runRewards.ingredients.tomato, undefined, 'failure clears
 assert.equal(api.state.runRewards.lostIngredients.tomato, 1, 'Fresh Pack removes one item from losses');
 assert.equal(api.state.runRewards.preservedIngredients.tomato, 1, 'Fresh Pack records the protected ingredient');
 
+api.state.runLoadout = [];
+api.startRun('normal');
+api.state.runRewards.ingredients.tomato = 2;
+api.gameOver('封印失败');
+assert.equal(api.state.runRewards.lostIngredients.tomato, 2, 'an owned but uncarried Fresh Pack preserves nothing');
+
+const nineTailedFox = api.GHOSTS.find(ghost => ghost.name === '九尾狐');
+const zhuyin = api.GHOSTS.find(ghost => ghost.name === '烛阴');
+api.state.runLoadout = [];
+api.startRun('normal');
+api.state.content = { type: 'ghost', ghosts: [nineTailedFox], requiredSeals: 1, sealed: 0, talismans: [] };
+api.handleSealClick();
+assert.equal(api.state.ghostEyeRoom, 0, 'sealing Nine-tailed Fox grants no Ghost Eye');
+assert.equal(api.state.screen, 'game', 'sealing a ghost does not open a skill screen');
+
+api.state.mode = 'normal';
+api.state.content = { type: 'ghost', ghosts: [zhuyin], requiredSeals: 1, sealed: 0, talismans: [] };
+api.handleSealClick();
+assert.equal(api.state.foresight.active, false, 'sealing Zhuyin grants no Foresight');
+assert.equal(api.state.screen, 'game', 'Zhuyin seal remains in the normal game flow');
+
+api.startRun('normal');
+api.state.mode = 'bossFight';
+api.state.content = { type: 'boss', stage: 1, bossGhost: zhuyin, cfg: { seals: 1 }, hits: 0, talismans: [] };
+api.handleBossSealClick();
+assert.equal(api.state.foresight.active, false, 'sealing a boss Zhuyin grants no Foresight');
+assert.equal(api.state.mode, 'corridorTransition', 'boss victory advances normally without a skill reward');
+
 api.state.save.dailySkills.ids.push('revive');
 api.state.runLoadout = ['revive'];
 api.startRun('normal');
@@ -192,5 +243,22 @@ api.state.save.coins = 1000;
 api.upgradeKitchenSlots();
 assert.equal(api.state.save.kitchen.slots, 4, 'permanent kitchen upgrade unlocks the optional fourth slot');
 assert.equal(api.state.save.coins, 220, 'permanent kitchen upgrade spends coins once');
+
+api.openSkillShop('pets');
+assert.equal(api.state.screen, 'shop', 'skill shop is an independent screen');
+assert.equal(api.state.shopReturnTo, 'pets', 'independent shop preserves its return destination');
+
+sandbox.window.innerWidth = 360;
+sandbox.window.innerHeight = 640;
+api.resize();
+api.state.screen = 'pets';
+api.state.kitchenView = 'cook';
+api.draw();
+assert.equal(api.state.layout.w, 360, 'compact phone kitchen renders at 360px width');
+sandbox.window.innerWidth = 390;
+sandbox.window.innerHeight = 844;
+api.resize();
+api.draw();
+assert.equal(api.state.layout.h, 844, 'tall phone kitchen renders at 844px height');
 
 console.log('food-loop smoke test passed');
