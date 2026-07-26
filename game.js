@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.21.0_daily_market_titles';
+  const VERSION = 'v0.21.1_active_eye_slow_cooking';
   const TEST_PANTRY_STOCK = 99;
   const LOADOUT_LIMITS = { active: 1, support: 2 };
   const BUSINESS_TITLES = [
@@ -408,18 +408,39 @@
     return Math.max(0, Number(state.ghostEyeUntil || 0) - state.t);
   }
 
+  function ghostEyeCooldownProgress() {
+    const skill = dailySkillById('ghostEyeSkill');
+    if (!skill || ghostEyeRemaining() > 0) return ghostEyeRemaining() > 0 ? 0 : 1;
+    const exact = Math.max(0, Number(state.skillReadyAt.ghostEyeSkill || 0) - state.t);
+    if (exact <= 0) return 1;
+    return clamp(1 - exact / skill.cooldownSeconds, 0, 1);
+  }
+
+  function ghostEyeOpenRatio() {
+    if (ghostEyeRemaining() > 0 || skillCooldownRemaining('ghostEyeSkill') <= 0) return 1;
+    const elapsed = Math.max(0, state.t - Number(state.ghostEyeUntil || state.t));
+    if (elapsed < 0.3) return easeInOut(1 - elapsed / 0.3);
+    return ghostEyeCooldownProgress();
+  }
+
+  function carriedActiveSkill() {
+    return state.runLoadout.map(dailySkillById).find(skill => skill && skill.type === 'active') || null;
+  }
+
   function useDailyActiveSkill(id) {
     const skill = dailySkillById(id);
     if (!skill || !hasCarriedSkill(id) || state.screen !== 'game' || state.mode !== 'normal') return false;
     const remaining = skillCooldownRemaining(id);
     if (remaining > 0) {
-      setToast(ui(`还需经过 ${remaining} 扇门`, `${remaining} doors until ready`), 1.3);
+      setToast(id === 'ghostEyeSkill'
+        ? ui(`透视还需冷却 ${remaining} 秒`, `Ghost Eye ready in ${remaining}s`)
+        : ui(`还需经过 ${remaining} 扇门`, `${remaining} doors until ready`), 1.3);
       return false;
     }
     if (id === 'ghostEyeSkill') {
       state.ghostEyeUntil = state.t + skill.duration;
-      state.eyeFx = 1.05;
-      state.skillReadyAt[id] = state.t + skill.cooldownSeconds;
+      state.eyeFx = 0.45;
+      state.skillReadyAt[id] = state.ghostEyeUntil + skill.cooldownSeconds;
       setToast(ui(`透视开启：${skill.duration}秒内看穿门后`, `Ghost Eye reveals doors for ${skill.duration}s`), 1.5);
       return true;
     }
@@ -660,7 +681,7 @@
       door, hole,
       home: { x: 68, y: 18, w: 78, h: 36 },
       galleryButton: { x: w - 88, y: 18, w: 78, h: 36 },
-      sealButton: { x: w / 2 - 92, y: h - 124, w: 184, h: 84 },
+      sealButton: { x: w / 2 - 84, y: h - 124, w: 168, h: 84 },
       bossButton: { x: w / 2 - 136, y: h - 118, w: 272, h: 76 }
     };
   }
@@ -1692,6 +1713,14 @@
     }
 
     if (state.mode !== 'normal') return;
+
+    const activeSkill = carriedActiveSkill();
+    const activeRect = activeSkillButtonRect();
+    if (activeSkill && hit(p, inflate(activeRect, 7, 7))) {
+      setPressed(`runSkill-${activeSkill.id}`);
+      useDailyActiveSkill(activeSkill.id);
+      return;
+    }
 
     for (const r of runSkillButtonRects()) {
       if (!hit(p, inflate(r, 7, 6))) continue;
@@ -3058,11 +3087,6 @@
       ctx.font = '900 10px system-ui, sans-serif';
       ctx.fillText('TEST', l.w - 10, 82);
     }
-    if (ghostEyeRemaining() > 0 && state.mode === 'normal') {
-      ctx.font = '800 11px system-ui, sans-serif';
-      ctx.fillText(ui(`透视：${ghostEyeRemaining().toFixed(1)}秒`, `Eye: ${ghostEyeRemaining().toFixed(1)}s`), l.w - 10, l.topH - 29);
-    }
-
     if (state.mode === 'bossFight' && state.content && state.content.type === 'boss') {
       drawBossHPBar();
     }
@@ -3093,14 +3117,13 @@
     if (state.mode === 'bossFight') return drawBossSealButton(l.bossButton);
     drawRunSkillButtons();
     drawSealButton(l.sealButton);
+    drawActiveSkillButton();
   }
 
   function runSkillButtonRects() {
     const l = state.layout;
     const ids = [];
     if (hasCarriedSkill('freshSeal')) ids.push('freshSeal');
-    if (hasCarriedSkill('ghostEyeSkill')) ids.push('ghostEyeSkill');
-    if (hasCarriedSkill('foresightSkill')) ids.push('foresightSkill');
     if (!ids.length) return [];
     const gap = 7;
     const margin = 12;
@@ -3115,18 +3138,11 @@
 
   function drawRunSkillButton(r) {
     const active = r.id === 'freshSeal' && state.freshSealArmed;
-    const remaining = r.id === 'freshSeal' ? 0 : skillCooldownRemaining(r.id);
-    const foresightUsesLeft = r.id === 'foresightSkill' ? Math.max(0, state.foresight.maxPerRun - state.foresight.used) : 0;
-    const exhausted = r.id === 'foresightSkill' && foresightUsesLeft <= 0;
     const labels = {
-      freshSeal: ui(`封鲜符 ×${state.freshSeals}`, `Fresh ×${state.freshSeals}`),
-      ghostEyeSkill: remaining ? ui(`透视 ${remaining}秒`, `Eye ${remaining}s`) : ui('透视', 'Eye'),
-      foresightSkill: exhausted ? ui('未来 已用完', 'Future 0 left')
-        : remaining ? ui(`未来 ${remaining}门 · 余${foresightUsesLeft}`, `Future ${remaining} · ${foresightUsesLeft} left`)
-          : ui(`遇见未来 ×${foresightUsesLeft}`, `Future ×${foresightUsesLeft}`)
+      freshSeal: ui(`封鲜符 ×${state.freshSeals}`, `Fresh ×${state.freshSeals}`)
     };
     drawPressTransform(r, `runSkill-${r.id}`, () => {
-      ctx.fillStyle = active ? '#b72820' : remaining || exhausted ? '#ddd8cc' : '#fffdf6';
+      ctx.fillStyle = active ? '#b72820' : '#fffdf6';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 3;
       roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
@@ -3136,6 +3152,162 @@
       ctx.textBaseline = 'middle';
       ctx.fillText(labels[r.id] || r.id, r.x + r.w / 2, r.y + r.h / 2, r.w - 8);
     });
+  }
+
+  function activeSkillButtonRect() {
+    const l = state.layout;
+    return { x: l.w - 72, y: l.h - 112, w: 60, h: 60 };
+  }
+
+  function drawActiveSkillButton() {
+    const skill = carriedActiveSkill();
+    if (!skill) return;
+    if (skill.id === 'ghostEyeSkill') drawGhostEyeSkillButton(activeSkillButtonRect());
+    else if (skill.id === 'foresightSkill') drawForesightSkillButton(activeSkillButtonRect());
+  }
+
+  function drawGhostEyeSkillButton(r) {
+    const activeRemaining = ghostEyeRemaining();
+    const active = activeRemaining > 0;
+    const cooldown = active ? 0 : skillCooldownRemaining('ghostEyeSkill');
+    const ready = !active && cooldown <= 0;
+    const progress = active || ready ? 1 : ghostEyeCooldownProgress();
+    const open = ghostEyeOpenRatio();
+    const glow = active ? 0.62 + Math.sin(state.t * 7) * 0.16 : ready ? 0.12 + Math.sin(state.t * 3) * 0.05 : 0;
+    drawPressTransform(r, 'runSkill-ghostEyeSkill', () => {
+      ctx.save();
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      if (glow > 0) {
+        ctx.globalAlpha = glow;
+        ctx.strokeStyle = '#ffd84d';
+        ctx.lineWidth = active ? 7 : 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r.w * (active ? 0.56 : 0.51), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = ready || active ? '#fffdf6' : '#d7d7d7';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawEyeGlyph(cx, cy, 42, open, progress, active ? activeRemaining : 0);
+      ctx.restore();
+    });
+    ctx.save();
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 9px system-ui, sans-serif';
+    const label = active ? `${activeRemaining.toFixed(1)}s` : ready ? ui('可用', 'READY') : `${cooldown}s`;
+    ctx.fillText(label, r.x + r.w / 2, r.y + r.h + 8);
+    ctx.restore();
+  }
+
+  function drawEyeGlyph(cx, cy, size, openRatio, colorProgress, countdown = 0) {
+    const open = clamp(openRatio, 0, 1);
+    const color = clamp(colorProgress, 0, 1);
+    const halfW = size * 0.42;
+    const halfH = 1.2 + size * 0.25 * open;
+    ctx.save();
+    ctx.fillStyle = color > 0.08 ? '#fffdf6' : '#bdbdbd';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - halfW, cy);
+    ctx.quadraticCurveTo(cx, cy - halfH, cx + halfW, cy);
+    ctx.quadraticCurveTo(cx, cy + halfH, cx - halfW, cy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    if (open > 0.035) {
+      ctx.save();
+      ctx.globalAlpha = clamp(open * 1.8, 0, 1);
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW, cy);
+      ctx.quadraticCurveTo(cx, cy - halfH, cx + halfW, cy);
+      ctx.quadraticCurveTo(cx, cy + halfH, cx - halfW, cy);
+      ctx.closePath();
+      ctx.clip();
+      const irisR = size * 0.19;
+      ctx.fillStyle = `hsl(193  ${Math.round(72 * color)}% ${Math.round(42 + color * 14)}%)`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, irisR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.arc(cx, cy, size * 0.085, 0, Math.PI * 2);
+      ctx.fill();
+      if (color > 0.15) {
+        ctx.globalAlpha = color;
+        ctx.fillStyle = '#fff06d';
+        ctx.beginPath();
+        ctx.arc(cx - size * 0.055, cy - size * 0.055, size * 0.035, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    if (countdown > 0) {
+      ctx.fillStyle = '#fffdf6';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2.5;
+      ctx.font = '900 8.5px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const text = countdown.toFixed(1);
+      ctx.strokeText(text, cx, cy);
+      ctx.fillText(text, cx, cy);
+    }
+    ctx.restore();
+  }
+
+  function drawForesightSkillButton(r) {
+    const skill = dailySkillById('foresightSkill');
+    const remaining = skillCooldownRemaining('foresightSkill');
+    const usesLeft = Math.max(0, state.foresight.maxPerRun - state.foresight.used);
+    const exhausted = usesLeft <= 0;
+    const progress = exhausted ? 0 : remaining > 0 ? clamp(1 - remaining / skill.cooldown, 0, 1) : 1;
+    drawPressTransform(r, 'runSkill-foresightSkill', () => {
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      ctx.fillStyle = exhausted || remaining > 0 ? '#d7d7d7' : '#fffdf6';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = exhausted ? '#777' : '#58c7e8';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r.w / 2 - 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+      ctx.stroke();
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 3; i++) {
+        const ox = (i - 1) * 7;
+        roundRect(cx + ox - 7, cy - 12 + Math.abs(i - 1) * 3, 14, 23, 4, false, true, 2.5);
+      }
+      ctx.fillStyle = '#fff06d';
+      ctx.beginPath();
+      ctx.arc(cx + 12, cy - 13, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.save();
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 8.5px system-ui, sans-serif';
+    const label = exhausted ? ui('已用完', 'EMPTY') : remaining > 0 ? ui(`${remaining}门 · 余${usesLeft}`, `${remaining} doors · ${usesLeft}`) : ui(`可用 ×${usesLeft}`, `READY ×${usesLeft}`);
+    ctx.fillText(label, r.x + r.w / 2, r.y + r.h + 8, 78);
+    ctx.restore();
   }
 
   function drawSealButton(r) {
@@ -3181,7 +3353,7 @@
   function drawGhostEyeFx() {
     if (state.eyeFx <= 0) return;
     const l = state.layout;
-    const p = clamp(state.eyeFx / 1.05, 0, 1);
+    const p = clamp(state.eyeFx / 0.45, 0, 1);
     ctx.save();
     ctx.globalAlpha = p * 0.85;
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -3262,9 +3434,9 @@
       '9. Successful dishes enter permanent dish stock. Daily prices refresh at local midnight, so low-price dishes can be held for later.',
       '10. Selling adds permanent lifetime revenue and promotes the kitchen from Street Stall toward Star Hotel titles.',
       '11. Every finished run refreshes the skill shop. Bought skills last until local midnight; carry 1 active and up to 2 passive/trigger skills.',
-      '12. Animals wear chef hats and grow as kitchen teams only. More chefs shorten the cooking progress time; they never join patrol runs.',
+      '12. Cooking starts at 3 minutes with no chefs. Each chef cuts 10 seconds, down to a 30-second minimum; cooking continues while away.',
       '13. Only skills carried in the current loadout can work. Ghosts never grant skills after sealing.',
-      '14. Ghost Eye reveals doors for 5 seconds and cools down for 30 seconds. Foresight is limited to 2 uses per run.',
+      '14. The eye beside Seal glows for a 5-second reveal, then closes and slowly opens through a 30-second cooldown. Foresight is limited to 2 uses per run.',
       '15. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
       '16. Zhuyin remains a rare boss-like spirit, but sealing it grants only normal rewards and ingredients.'
     ] : [
@@ -3279,9 +3451,9 @@
       '9. 成功料理会进入可跨天保存的料理仓库；每日00:00刷新售价，低价时可以先囤货。',
       '10. 卖餐会累计永久营业收入，并让称号从「路边摊」逐步晋升至「星级大酒店」。',
       '11. 每局结束刷新技能商店；买下的技能当天拥有，出发前可携带1个主动技能及最多2个被动/触发技能，00:00清空。',
-      '12. 小动物统一戴厨师帽并累计为厨房队伍；厨师越多，出餐进度越快，但不进入巡夜。',
+      '12. 零厨师出餐需要3分钟；每名厨师减少10秒，最低30秒，离开厨房或关闭网页后仍会继续制作。',
       '13. 只有本局出发前携带的技能能够生效；封印任何妖怪都不会额外赠送技能。',
-      '14. 透视开启后持续看穿门后5秒并冷却30秒；遇见未来每局最多使用2次。',
+      '14. 封印旁的透视眼发光并生效5秒，随后闭眼，在30秒冷却中慢慢睁开；遇见未来每局最多使用2次。',
       '15. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
       '16. 烛阴仍是极少现身的Boss级妖怪，但封印后只结算常规奖励与食材。'
     ];
@@ -3723,7 +3895,14 @@
   }
 
   function kitchenCookDuration(chefCount = totalChefCount()) {
-    return Math.max(1.2, 6 / Math.sqrt(Math.max(1, chefCount)));
+    return Math.max(30, 180 - Math.max(0, chefCount) * 10);
+  }
+
+  function formatKitchenTime(seconds) {
+    const total = Math.max(0, Math.ceil(Number(seconds || 0)));
+    const minutes = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${minutes}:${String(secs).padStart(2, '0')}`;
   }
 
   function kitchenJobProgress() {
@@ -3739,7 +3918,7 @@
     state.save.kitchenJob = { recipeId, chefs, startedAt, finishAt: startedAt + duration * 1000 };
     state.kitchenCookFx = 1.15;
     saveGame();
-    setToast(ui(`小厨师开工，预计 ${duration.toFixed(1)} 秒出餐`, `Chefs started; ready in ${duration.toFixed(1)}s`), 1.7);
+    setToast(ui(`小厨师开工，预计 ${formatKitchenTime(duration)} 出餐`, `Chefs started; ready in ${formatKitchenTime(duration)}`), 1.7);
   }
 
   function finishKitchenJobIfReady(force = false) {
@@ -4000,7 +4179,7 @@
     drawTab(methods.stir, ui('炒', 'Stir'), state.kitchenMethod === 'stir');
     drawTab(methods.steam, ui('蒸', 'Steam'), state.kitchenMethod === 'steam');
     if (state.save.kitchenJob) drawKitchenJobProgress();
-    else drawUIButton(kitchenCookButtonRect(), ui('③ 小厨师开工！', '③ Chefs, cook!'), ui(`当前 ${totalChefCount()} 名厨师`, `${totalChefCount()} chefs ready`), 'cookRecipe');
+    else drawUIButton(kitchenCookButtonRect(), ui('③ 小厨师开工！', '③ Chefs, cook!'), ui(`厨师 ${totalChefCount()} · 预计 ${formatKitchenTime(kitchenCookDuration())}`, `${totalChefCount()} chefs · ${formatKitchenTime(kitchenCookDuration())}`), 'cookRecipe');
     drawKitchenSteamFx(stove);
   }
 
@@ -4025,7 +4204,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 12px system-ui, sans-serif';
-    ctx.fillText(ui(`出餐中 ${remaining.toFixed(1)}秒`, `Cooking ${remaining.toFixed(1)}s`), r.x + r.w / 2, r.y + 15);
+    ctx.fillText(ui(`出餐中 ${formatKitchenTime(remaining)}`, `Cooking ${formatKitchenTime(remaining)}`), r.x + r.w / 2, r.y + 15);
     ctx.font = '700 9px system-ui, sans-serif';
     const team = job.chefs > 0 ? ui(`${job.chefs} 名厨师协作`, `${job.chefs} chefs`) : ui('基础灶台', 'Base stove');
     ctx.fillText(`${team} · ${Math.round(progress * 100)}%`, r.x + r.w / 2, r.y + 31);

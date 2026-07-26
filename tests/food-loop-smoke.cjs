@@ -8,14 +8,14 @@ let source = fs.readFileSync(gamePath, 'utf8');
 source = source.replace(/\}\)\(\);\s*$/, `
   globalThis.__foodTest = {
     VERSION, INGREDIENTS, RECIPES, DAILY_SKILLS, GHOSTS, PETS, TEST_PANTRY_STOCK, LOADOUT_LIMITS, BUSINESS_TITLES, state,
-    emptyRunRewards, cookSelectedRecipe, finishKitchenJobIfReady, kitchenCookDuration, buyDailySkill, startRun,
+    emptyRunRewards, cookSelectedRecipe, finishKitchenJobIfReady, kitchenCookDuration, formatKitchenTime, buyDailySkill, startRun,
     rewardIngredientDrop, safeReturnHome, gameOver, recipeCount,
     sellPlatedDish, sellStoredDish, discardPlatedDish, useDailyActiveSkill,
-    skillCooldownRemaining, generateDailyShopOffers, upgradeKitchenSlots,
+    skillCooldownRemaining, ghostEyeCooldownProgress, ghostEyeOpenRatio, generateDailyShopOffers, upgradeKitchenSlots,
     normalizeSave, sanitizeLoadout, dailyPriceMultiplier, dailyDishPrice, businessTitleInfo, totalDishCount,
     hasCarriedSkill, openRunPreparation, openSkillShop,
     startCorridorAdvance, finishCorridorAdvance, handleSealClick,
-    handleBossSealClick, finishKitchenDrag, resize, draw
+    handleBossSealClick, finishKitchenDrag, activeSkillButtonRect, carriedActiveSkill, runSkillButtonRects, resize, draw
   };
 })();`);
 
@@ -106,7 +106,7 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.21.0_daily_market_titles');
+assert.equal(api.VERSION, 'v0.21.1_active_eye_slow_cooking');
 assert.equal(api.INGREDIENTS.length, 4);
 assert.equal(api.RECIPES.length, 7);
 assert.equal(api.TEST_PANTRY_STOCK, 99);
@@ -123,6 +123,14 @@ assert.deepEqual(
 const migratedDishSave = api.normalizeSave({ platedDish: { recipeId: 'tomato_egg', first: true } });
 assert.equal(migratedDishSave.dishInventory.tomato_egg, 1, 'old plated dish migrates into persistent dish inventory');
 assert.equal(migratedDishSave.firstSaleBonuses.tomato_egg, true, 'old first-sale bonus is preserved');
+const migratedJobSave = api.normalizeSave({ kitchenJob: { recipeId: 'tomato_egg', startedAt: 100, finishAt: 6100, chefs: 2 } });
+assert.equal(migratedJobSave.kitchenJob.finishAt, 6100, 'existing cooking jobs preserve their original finish time');
+const liveSave = api.state.save;
+api.state.save = migratedJobSave;
+api.state.save.kitchenJob.finishAt = Date.now() - 1;
+assert.equal(api.finishKitchenJobIfReady(), true, 'an offline job completes automatically after its saved finish time');
+assert.equal(api.state.save.dishInventory.tomato_egg, 1, 'offline completion stocks the finished dish');
+api.state.save = liveSave;
 
 api.state.kitchenSlots = [null, null, null, null];
 api.state.kitchenDrag = { id: 'tomato', moved: false };
@@ -137,8 +145,19 @@ api.state.kitchenSlots = ['tomato', 'egg', null, null];
 api.cookSelectedRecipe();
 assert.ok(api.state.save.kitchenJob, 'cooking starts a timed production job');
 assert.equal(api.state.save.dishInventory.tomato_egg, 0, 'dish is not stocked before the progress finishes');
-assert.equal(api.kitchenCookDuration(1), 6, 'one chef uses the six-second base cooking time');
-assert.ok(api.kitchenCookDuration(9) < api.kitchenCookDuration(1), 'more chefs shorten cooking time');
+assert.equal(api.kitchenCookDuration(0), 180, 'base stove needs three minutes');
+assert.equal(api.kitchenCookDuration(1), 170);
+assert.equal(api.kitchenCookDuration(5), 130);
+assert.equal(api.kitchenCookDuration(10), 80);
+assert.equal(api.kitchenCookDuration(15), 30);
+assert.equal(api.kitchenCookDuration(20), 30, 'cooking time has a thirty-second floor');
+assert.equal(api.formatKitchenTime(180), '3:00');
+assert.equal(api.formatKitchenTime(80), '1:20');
+const firstJobFinishAt = api.state.save.kitchenJob.finishAt;
+assert.equal(api.state.save.kitchenJob.chefs, 0, 'chef count is locked when production starts');
+assert.equal(api.state.save.kitchenJob.finishAt - api.state.save.kitchenJob.startedAt, 180000, 'zero-chef job stores a three-minute finish time');
+api.cookSelectedRecipe();
+assert.equal(api.state.save.kitchenJob.finishAt, firstJobFinishAt, 'a second dish cannot start while the stove is busy');
 api.finishKitchenJobIfReady(true);
 assert.equal(api.state.save.recipes.tomato_egg, true, 'finished production unlocks the recipe');
 assert.equal(api.state.save.coins, 0, 'cooking no longer auto-sells');
@@ -203,15 +222,23 @@ api.startRun('normal');
 assert.equal(api.state.freshSeals, 1, 'Fresh Seal skill grants one charge per run');
 assert.equal(api.useDailyActiveSkill('ghostEyeSkill'), true, 'active skill can be used during a run');
 assert.equal(api.state.ghostEyeUntil - api.state.t, 5, 'Ghost Eye starts a five-second reveal window');
-assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 30, 'Ghost Eye starts its thirty-second cooldown');
+assert.equal(api.state.skillReadyAt.ghostEyeSkill - api.state.ghostEyeUntil, 30, 'thirty-second cooldown starts after the reveal ends');
+assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 35, 'full cycle includes five active and thirty cooldown seconds');
+assert.equal(api.ghostEyeOpenRatio(), 1, 'active eye is fully open');
 api.startCorridorAdvance(2);
 api.finishCorridorAdvance();
 assert.ok(api.state.ghostEyeUntil > api.state.t, 'Ghost Eye remains active after advancing to another door');
 api.state.t += 5.1;
 assert.ok(api.state.ghostEyeUntil <= api.state.t, 'Ghost Eye expires after five seconds');
-assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 25, 'door advances do not reduce the time cooldown');
-api.state.t += 25;
-assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 0, 'Ghost Eye is ready after thirty elapsed seconds');
+assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 30, 'door advances do not reduce the post-effect time cooldown');
+api.state.t += 0.2;
+assert.ok(api.ghostEyeOpenRatio() < 0.05, 'eye closes at the start of cooldown');
+api.state.t += 14.7;
+assert.ok(Math.abs(api.ghostEyeCooldownProgress() - 0.5) < 0.02, 'cooldown reaches half progress after fifteen seconds');
+assert.ok(Math.abs(api.ghostEyeOpenRatio() - 0.5) < 0.02, 'eye is half open at half cooldown');
+api.state.t += 15;
+assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 0, 'Ghost Eye is ready after thirty cooldown seconds');
+assert.equal(api.ghostEyeOpenRatio(), 1, 'ready eye is fully open again');
 api.state.freshSealArmed = true;
 api.rewardIngredientDrop({ ghosts: [api.GHOSTS[0]] });
 assert.equal(api.state.freshSeals, 0, 'armed Fresh Seal consumes one charge');
@@ -293,6 +320,16 @@ assert.equal(api.state.shopReturnTo, 'pets', 'independent shop preserves its ret
 sandbox.window.innerWidth = 360;
 sandbox.window.innerHeight = 640;
 api.resize();
+api.state.runLoadout = ['ghostEyeSkill', 'freshSeal'];
+const activeButton = api.activeSkillButtonRect();
+assert.ok(activeButton.w >= 56 && activeButton.h >= 56, 'active skill circle keeps a mobile touch target');
+assert.ok(activeButton.x > api.state.layout.sealButton.x + api.state.layout.sealButton.w, 'active skill circle does not overlap the seal button');
+assert.equal(api.carriedActiveSkill().id, 'ghostEyeSkill');
+assert.deepEqual(Array.from(api.runSkillButtonRects().map(rect => rect.id)), ['freshSeal'], 'active skill leaves the upper utility row');
+api.state.runLoadout = ['foresightSkill'];
+api.state.foresight = { untilRoom: api.state.room + 7, used: 1, readyRoom: api.state.room + 4 };
+api.draw();
+assert.equal(api.carriedActiveSkill().id, 'foresightSkill', 'Foresight reuses the same active skill circle');
 api.state.screen = 'pets';
 api.state.kitchenView = 'cook';
 api.draw();
