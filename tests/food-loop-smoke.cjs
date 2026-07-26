@@ -7,12 +7,12 @@ const gamePath = path.join(__dirname, '..', 'game.js');
 let source = fs.readFileSync(gamePath, 'utf8');
 source = source.replace(/\}\)\(\);\s*$/, `
   globalThis.__foodTest = {
-    VERSION, INGREDIENTS, RECIPES, DAILY_SKILLS, GHOSTS, TEST_PANTRY_STOCK, state,
+    VERSION, INGREDIENTS, RECIPES, DAILY_SKILLS, GHOSTS, PETS, TEST_PANTRY_STOCK, state,
     emptyRunRewards, cookSelectedRecipe, buyDailySkill, startRun,
     rewardIngredientDrop, safeReturnHome, gameOver, recipeCount,
     sellPlatedDish, discardPlatedDish, useDailyActiveSkill,
     skillCooldownRemaining, generateDailyShopOffers, upgradeKitchenSlots,
-    normalizeSave, activePet
+    normalizeSave, hasCarriedSkill, openRunPreparation
   };
 })();`);
 
@@ -103,13 +103,13 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.18.1_test_pantry_no_pet_runs');
+assert.equal(api.VERSION, 'v0.19.0_kitchen_flow_loadout_chefs');
 assert.equal(api.INGREDIENTS.length, 4);
-assert.equal(api.RECIPES.length, 4);
+assert.equal(api.RECIPES.length, 7);
 assert.equal(api.TEST_PANTRY_STOCK, 99);
 assert.equal(Math.min(...Object.values(api.state.save.pantry)), 99, 'test pantry starts full');
-assert.equal(api.normalizeSave({ activePet: 'rabbit' }).activePet, '', 'old equipped pet is cleared during save migration');
-assert.equal(api.activePet(), null, 'no animal can be active during a run');
+assert.equal(api.normalizeSave({ kitchen: { slots: 2 } }).kitchen.slots, 3, 'old saves receive the three-slot cooking counter');
+assert.ok(api.PETS.every(pet => !pet.forms && pet.role), 'animal chefs no longer contain level or evolution forms');
 
 api.state.save.pantry.tomato = 1;
 api.state.save.pantry.egg = 1;
@@ -136,6 +136,15 @@ assert.equal(api.state.save.pantry.rice, 0, 'invalid experiment consumes ingredi
 api.discardPlatedDish();
 assert.equal(api.state.save.platedDish, null, 'dark dish can be discarded');
 
+api.state.save.pantry.tomato = 1;
+api.state.save.pantry.egg = 1;
+api.state.save.pantry.rice = 1;
+api.state.kitchenMethod = 'stir';
+api.state.kitchenSlots = ['tomato', 'egg', 'rice', null];
+api.cookSelectedRecipe();
+assert.equal(api.state.save.platedDish.recipeId, 'tomato_egg_rice', 'three-ingredient recipe is cookable from the base counter');
+api.sellPlatedDish();
+
 api.state.save.coins = 1000;
 api.state.save.dailySkills.offers = ['freshSeal', 'preserveBag', 'ghostEyeSkill'];
 api.buyDailySkill(api.DAILY_SKILLS.find(skill => skill.id === 'freshSeal'));
@@ -145,6 +154,9 @@ assert.deepEqual(Array.from(api.state.save.dailySkills.ids), ['freshSeal', 'pres
 assert.equal(api.state.save.coins, 560, 'skills use fixed listed prices');
 
 api.state.save.recipes.egg_rice = true;
+api.state.save.dailySkills.loadout = ['freshSeal', 'preserveBag', 'ghostEyeSkill'];
+api.openRunPreparation();
+assert.deepEqual(Array.from(api.state.runLoadout), ['freshSeal', 'preserveBag', 'ghostEyeSkill'], 'pre-run preparation restores the chosen three-skill loadout');
 api.startRun('normal');
 assert.equal(api.state.freshSeals, 1, 'Fresh Seal skill grants one charge per run');
 assert.equal(api.useDailyActiveSkill('ghostEyeSkill'), true, 'active skill can be used during a run');
@@ -167,6 +179,7 @@ assert.equal(api.state.runRewards.lostIngredients.tomato, 1, 'Fresh Pack removes
 assert.equal(api.state.runRewards.preservedIngredients.tomato, 1, 'Fresh Pack records the protected ingredient');
 
 api.state.save.dailySkills.ids.push('revive');
+api.state.runLoadout = ['revive'];
 api.startRun('normal');
 api.gameOver('门开太久，鬼冲出来了');
 assert.equal(api.state.reviveUsed, true, 'revive triggers once per run');
@@ -175,9 +188,9 @@ api.gameOver('门开太久，鬼冲出来了');
 assert.equal(api.state.screen, 'result', 'second lethal ghost escape ends the run');
 
 api.state.save.coins = 1000;
-api.state.save.recipes.steamed_egg = true;
+['steamed_egg', 'rice_cake', 'tomato_egg_water'].forEach(id => { api.state.save.recipes[id] = true; });
 api.upgradeKitchenSlots();
-assert.equal(api.state.save.kitchen.slots, 3, 'permanent kitchen upgrade unlocks a third slot');
-assert.equal(api.state.save.coins, 680, 'permanent kitchen upgrade spends coins once');
+assert.equal(api.state.save.kitchen.slots, 4, 'permanent kitchen upgrade unlocks the optional fourth slot');
+assert.equal(api.state.save.coins, 220, 'permanent kitchen upgrade spends coins once');
 
 console.log('food-loop smoke test passed');
