@@ -190,6 +190,7 @@
     },
     toast: null,
     preloadElapsed: 0,
+    preloadStartedAt: performance.now(),
     preloadMin: 0.8,
     preloadMax: 5.0,
     resultReason: '',
@@ -1546,7 +1547,7 @@
     finishKitchenJobIfReady();
 
     if (state.screen === 'preload') {
-      state.preloadElapsed += dt;
+      state.preloadElapsed = Math.max(state.preloadElapsed + dt, (performance.now() - state.preloadStartedAt) / 1000);
       const p = preloadProgress();
       const ready = p.ratio >= 0.98 || state.preloadElapsed >= state.preloadMax;
       if (state.preloadElapsed >= state.preloadMin && ready) {
