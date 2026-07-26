@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.18.1_test_pantry_no_pet_runs';
+  const VERSION = 'v0.19.0_kitchen_flow_loadout_chefs';
   const TEST_PANTRY_STOCK = 99;
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -60,45 +60,31 @@
     {
       id: 'rabbit',
       animalName: '兔子',
-      name: '兔子',
-      nameEn: 'Rabbit',
-      forms: ['兔子学徒', '炒锅兔', '炒锅兔小组'],
-      formsEn: ['Rabbit Trainee', 'Wok Rabbit', 'Wok Rabbit Team'],
-      formNotes: ['刚加入厨房', '开始负责炒锅', '组成炒锅帮工小组'],
-      formNotesEn: ['New to the kitchen', 'Works at the wok', 'Forms a wok helper team'],
-      skill: '只在厨房负责炒锅',
-      skillEn: 'Kitchen-only wok helper',
+      name: '兔子厨师',
+      nameEn: 'Rabbit Chef',
+      role: '负责炒锅与备菜',
+      roleEn: 'Wok and prep helper',
       tint: '#f7f7ff'
     },
     {
       id: 'dog',
       animalName: '小狗',
-      name: '小狗',
-      nameEn: 'Dog',
-      forms: ['小狗学徒', '蒸笼犬', '蒸笼犬小组'],
-      formsEn: ['Dog Trainee', 'Steamer Dog', 'Steamer Dog Team'],
-      formNotes: ['刚加入厨房', '开始照看蒸笼', '组成蒸笼帮工小组'],
-      formNotesEn: ['New to the kitchen', 'Watches the steamer', 'Forms a steamer helper team'],
-      skill: '只在厨房负责蒸笼',
-      skillEn: 'Kitchen-only steamer helper',
+      name: '小狗厨师',
+      nameEn: 'Dog Chef',
+      role: '负责蒸笼与看火',
+      roleEn: 'Steamer and fire helper',
       tint: '#fff3d6'
     },
     {
       id: 'owl',
       animalName: '猫头鹰',
-      name: '猫头鹰',
-      nameEn: 'Owl',
-      forms: ['猫头鹰学徒', '配方鸮', '配方鸮小组'],
-      formsEn: ['Owl Trainee', 'Recipe Owl', 'Recipe Owl Team'],
-      formNotes: ['刚加入厨房', '开始整理配方', '组成配方记录小组'],
-      formNotesEn: ['New to the kitchen', 'Organizes recipes', 'Forms a recipe-recording team'],
-      skill: '只在厨房整理食谱',
-      skillEn: 'Kitchen-only recipe helper',
+      name: '猫头鹰厨师',
+      nameEn: 'Owl Chef',
+      role: '负责记录与整理食谱',
+      roleEn: 'Recipe and record helper',
       tint: '#e9f6ff'
     }
   ];
-
-  const PET_XP_LEVELS = [0, 2, 5];
 
   // GAME-003 食材料理灰盒：先用文字与现有妖怪验证循环，不提前补美术。
   const INGREDIENTS = [
@@ -112,7 +98,10 @@
     { id: 'tomato_egg', method: 'stir', ingredients: ['tomato', 'egg'], name: '赤焰番茄炒金羽蛋', nameEn: 'Ember Tomato & Golden Egg', price: 90 },
     { id: 'egg_rice', method: 'stir', ingredients: ['egg', 'rice'], name: '金羽蛋炒云纹米', nameEn: 'Golden Egg Cloud Rice', price: 110 },
     { id: 'steamed_egg', method: 'steam', ingredients: ['egg', 'water'], name: '月泉金羽蒸蛋', nameEn: 'Moonwater Steamed Egg', price: 80 },
-    { id: 'rice_cake', method: 'steam', ingredients: ['rice', 'water'], name: '云纹月泉米糕', nameEn: 'Cloud-Moon Rice Cake', price: 100 }
+    { id: 'rice_cake', method: 'steam', ingredients: ['rice', 'water'], name: '云纹月泉米糕', nameEn: 'Cloud-Moon Rice Cake', price: 100 },
+    { id: 'tomato_egg_rice', method: 'stir', ingredients: ['tomato', 'egg', 'rice'], name: '赤焰番茄金羽蛋炒饭', nameEn: 'Ember Tomato Egg Fried Rice', price: 180 },
+    { id: 'tomato_egg_water', method: 'steam', ingredients: ['tomato', 'egg', 'water'], name: '月泉番茄蒸金羽蛋', nameEn: 'Moonwater Tomato Steamed Egg', price: 155 },
+    { id: 'egg_rice_water', method: 'steam', ingredients: ['egg', 'rice', 'water'], name: '金羽云纹蒸米糕', nameEn: 'Golden Egg Cloud Rice Cake', price: 170 }
   ];
 
   const DAILY_SKILLS = [
@@ -125,8 +114,7 @@
   ];
 
   const KITCHEN_UPGRADES = [
-    { slots: 3, recipes: 2, price: 320, name: '三格料理台', nameEn: 'Three-slot Counter' },
-    { slots: 4, recipes: 4, price: 780, name: '四格料理台', nameEn: 'Four-slot Counter' }
+    { slots: 4, recipes: 5, price: 780, name: '四格料理台', nameEn: 'Four-slot Counter' }
   ];
 
   const GHOST_FIRE_FILES = [
@@ -144,89 +132,6 @@
     { stage: 4, time: 5.8, seals: 28 },
     { stage: 5, time: 5.5, seals: 30 }
   ];
-
-
-  const EVOLUTION_SKILLS = [
-    {
-      id: 'silence',
-      name: '消声',
-      nameEn: 'Mute',
-      desc: '妖怪的出现与逼近提示音变弱。',
-      descEn: 'Ghost approach sounds become quieter.',
-      unlockStage: 1,
-      max: 3
-    },
-    {
-      id: 'speed',
-      name: '疾行',
-      nameEn: 'Rush',
-      desc: '妖怪逼近速度提升。',
-      descEn: 'Ghosts approach faster.',
-      unlockStage: 1,
-      max: 3
-    },
-    {
-      id: 'weakLight',
-      name: '弱光',
-      nameEn: 'Dim Omen',
-      desc: '妖怪出现时的红光提示变弱。',
-      descEn: 'Red warning light becomes weaker.',
-      unlockStage: 1,
-      max: 3
-    },
-    {
-      id: 'ambush',
-      name: '伏影',
-      nameEn: 'Shadow Ambush',
-      desc: '妖怪会伏在门侧阴影里，不再总是出现在正中。',
-      descEn: 'Ghosts lurk near the door shadow instead of the center.',
-      unlockStage: 2,
-      max: 3
-    },
-    {
-      id: 'hideDoor',
-      name: '藏门',
-      nameEn: 'Door Hiding',
-      desc: '妖怪躲在门后，不管开多大都只能看到一部分。',
-      descEn: 'Ghosts hide behind the door and only reveal part of themselves.',
-      unlockStage: 3,
-      max: 3
-    },
-    {
-      id: 'multiShadow',
-      name: '多影',
-      nameEn: 'Many Shadows',
-      desc: '多只妖怪同时出现的概率提升。',
-      descEn: 'Multiple ghosts appear more often.',
-      unlockStage: 3,
-      max: 3
-    }
-  ];
-
-  const EVOLUTION_LEVEL_TEXT = [
-    '',
-    '初现',
-    '加深',
-    '大盛'
-  ];
-
-  const EVOLUTION_LEVEL_TEXT_EN = [
-    '',
-    'Awakens',
-    'Deepens',
-    'Intensifies'
-  ];
-
-  function emptyEvolutionState() {
-    return {
-      silence: 0,
-      speed: 0,
-      weakLight: 0,
-      ambush: 0,
-      hideDoor: 0,
-      multiShadow: 0
-    };
-  }
 
   const state = {
     screen: 'preload',
@@ -252,17 +157,10 @@
     bossDefeated: {},
     futureQueue: [],
     foresight: { active: false, phase: 'prepare', index: 0, timer: 0, count: 5, perDoorTime: 0.46, prepareTime: 1.15, returnTime: 0.65, used: 0, maxPerRun: 2, returnTo: 'game' },
-    pendingEvolutionAfterForesight: false,
-    evolution: emptyEvolutionState(),
-    evolutionOptions: [],
-    evolutionHistory: [],
-    lastEvolution: null,
-    petRun: { rabbitUsed: false, dogWarned: false },
-    petFx: null,
     runRewards: emptyRunRewards(),
     testMode: false,
     testZhuyinUsed: false,
-    menuHold: null,
+    runLoadout: [],
     musicOn: false,
     sfxOn: true,
     audioUnlocked: false,
@@ -297,7 +195,6 @@
     petDragStartY: 0,
     petDragStartScroll: 0,
     kitchenMethod: 'stir',
-    kitchenSelected: [],
     kitchenSlots: [null, null, null, null],
     kitchenDrag: null,
     kitchenTab: 'cook',
@@ -338,19 +235,18 @@
       const old = data.pets && data.pets[p.id] ? data.pets[p.id] : {};
       pets[p.id] = {
         met: !!old.met,
-        xp: Math.max(0, Number(old.xp || 0))
+        count: old.met ? Math.max(1, Number(old.count || old.xp || 1)) : 0
       };
     });
-    // 小动物只保留为厨房团队数据，不再允许带入局内。
-    const activePet = '';
     const storedDaily = data.dailySkills || {};
     const dailySkills = storedDaily.date === localDayKey()
       ? {
           date: storedDaily.date,
           ids: Array.from(new Set((storedDaily.ids || []).filter(id => DAILY_SKILLS.some(s => s.id === id)))),
-          offers: Array.from(new Set((storedDaily.offers || []).filter(id => DAILY_SKILLS.some(s => s.id === id)))).slice(0, 3)
+          offers: Array.from(new Set((storedDaily.offers || []).filter(id => DAILY_SKILLS.some(s => s.id === id)))).slice(0, 3),
+          loadout: Array.from(new Set((storedDaily.loadout || []).filter(id => (storedDaily.ids || []).includes(id) && DAILY_SKILLS.some(s => s.id === id)))).slice(0, 3)
         }
-      : { date: localDayKey(), ids: [], offers: [] };
+      : { date: localDayKey(), ids: [], offers: [], loadout: [] };
     const storedKitchen = data.kitchen || {};
     const platedDish = data.platedDish && (data.platedDish.id === 'dark' || RECIPES.some(r => r.id === data.platedDish.recipeId))
       ? data.platedDish
@@ -362,7 +258,6 @@
       ghosts: data.ghosts || {},
       people: data.people || {},
       pets,
-      activePet,
       petHouseSeen: !!data.petHouseSeen,
       spirit: Math.max(0, Number(data.spirit || 0)),
       talismanDust: Math.max(0, Number(data.talismanDust || 0)),
@@ -370,7 +265,7 @@
       recipes: data.recipes || {},
       coins: Math.max(0, Number(data.coins || 0)),
       dailySkills,
-      kitchen: { slots: clamp(Math.round(Number(storedKitchen.slots || 2)), 2, 4) },
+      kitchen: { slots: clamp(Math.round(Number(storedKitchen.slots || 3)), 3, 4) },
       platedDish
     };
   }
@@ -405,13 +300,14 @@
   function recipeCount() { return Object.keys(state.save.recipes || {}).filter(id => state.save.recipes[id]).length; }
   function hasDailySkill(id) {
     if (!state.save.dailySkills || state.save.dailySkills.date !== localDayKey()) {
-      state.save.dailySkills = { date: localDayKey(), ids: [], offers: [] };
+      state.save.dailySkills = { date: localDayKey(), ids: [], offers: [], loadout: [] };
       saveGame();
     }
     return state.save.dailySkills.ids.includes(id);
   }
 
   function dailySkillById(id) { return DAILY_SKILLS.find(skill => skill.id === id) || null; }
+  function hasCarriedSkill(id) { return state.runLoadout.includes(id); }
 
   function generateDailyShopOffers() {
     hasDailySkill('__refresh__');
@@ -437,7 +333,7 @@
 
   function useDailyActiveSkill(id) {
     const skill = dailySkillById(id);
-    if (!skill || !hasDailySkill(id) || state.screen !== 'game' || state.mode !== 'normal') return false;
+    if (!skill || !hasCarriedSkill(id) || state.screen !== 'game' || state.mode !== 'normal') return false;
     const remaining = skillCooldownRemaining(id);
     if (remaining > 0) {
       setToast(ui(`还需经过 ${remaining} 扇门`, `${remaining} doors until ready`), 1.3);
@@ -461,38 +357,8 @@
   function petForAnimal(name) { return PETS.find(p => p.animalName === name) || null; }
   function petSave(id) {
     if (!state.save.pets) state.save.pets = {};
-    if (!state.save.pets[id]) state.save.pets[id] = { met: false, xp: 0 };
+    if (!state.save.pets[id]) state.save.pets[id] = { met: false, count: 0 };
     return state.save.pets[id];
-  }
-  function petLevel(id) {
-    const p = petSave(id);
-    if (!p.met) return 0;
-    if (p.xp >= PET_XP_LEVELS[2]) return 3;
-    if (p.xp >= PET_XP_LEVELS[1]) return 2;
-    return 1;
-  }
-  function activePet() { return null; }
-  function activePetLevel() {
-    const p = activePet();
-    return p ? petLevel(p.id) : 0;
-  }
-  function petFormName(p) {
-    const level = petLevel(p.id);
-    return petFormNameAtLevel(p, level);
-  }
-  function petFormNameAtLevel(p, level) {
-    const idx = clamp((level || 1) - 1, 0, 2);
-    return isEn() ? p.formsEn[idx] : p.forms[idx];
-  }
-  function petFormNoteAtLevel(p, level) {
-    const idx = clamp((level || 1) - 1, 0, 2);
-    return isEn() ? p.formNotesEn[idx] : p.formNotes[idx];
-  }
-  function petXpToNext(id) {
-    const level = petLevel(id);
-    if (level <= 0) return PET_XP_LEVELS[1];
-    if (level >= 3) return 0;
-    return PET_XP_LEVELS[level] - petSave(id).xp;
   }
   function emptyRunRewards() {
     return {
@@ -500,9 +366,7 @@
       spirit: 0,
       talismanDust: 0,
       newPets: [],
-      petXp: {},
-      petEvolutions: [],
-      petTriggers: { rabbit: 0, dog: 0, owl: 0 },
+      petJoins: {},
       ingredients: {},
       bankedIngredients: {},
       preservedIngredients: {},
@@ -514,64 +378,15 @@
     if (!pet) return false;
     const ps = petSave(pet.id);
     const first = !ps.met;
-    const beforeLevel = petLevel(pet.id);
     ps.met = true;
-    const gain = first ? 2 : 1;
-    ps.xp += gain;
-    const afterLevel = petLevel(pet.id);
-    state.runRewards.petXp[pet.id] = (state.runRewards.petXp[pet.id] || 0) + gain;
+    ps.count = Math.max(0, Number(ps.count || 0)) + 1;
+    state.runRewards.petJoins[pet.id] = (state.runRewards.petJoins[pet.id] || 0) + 1;
     if (first && !state.runRewards.newPets.includes(pet.id)) state.runRewards.newPets.push(pet.id);
-    if (afterLevel > beforeLevel) {
-      state.runRewards.petEvolutions.push({ id: pet.id, from: beforeLevel || 1, to: afterLevel });
-      triggerPetFx(pet.id, 'evolve', afterLevel);
-    }
     saveGame();
     setToast(first
-      ? ui(`与${pet.name}结缘了`, `${pet.nameEn} joined you`)
-      : ui(`${pet.name}经验+1`, `${pet.nameEn} XP +1`), 1.6);
+      ? ui(`${pet.name}加入了厨房`, `${pet.nameEn} joined the kitchen`)
+      : ui(`${pet.name}队伍 +1`, `${pet.nameEn} team +1`), 1.6);
     return true;
-  }
-  function maybeOwlSense(content) {
-    const pet = activePet();
-    const level = activePetLevel();
-    if (!pet || pet.id !== 'owl' || level <= 0 || !content) return;
-    const gap = [0, 5, 4, 3][level] || 5;
-    if (state.room <= 1 || state.room % gap !== 0) return;
-    const text = content.type === 'ghost' || content.type === 'boss'
-      ? ui('猫头鹰凝视：门后有异常', 'Owl gaze: abnormal presence')
-      : ui('猫头鹰凝视：这门很安静', 'Owl gaze: quiet door');
-    state.runRewards.petTriggers.owl += 1;
-    triggerPetFx('owl', content.type === 'ghost' || content.type === 'boss' ? 'owl-danger' : 'owl-safe', level);
-    setToast(text, 1.8);
-  }
-  function maybeDogWarn(content) {
-    const pet = activePet();
-    const level = activePetLevel();
-    if (!pet || pet.id !== 'dog' || level <= 0 || state.petRun.dogWarned) return;
-    if (!content || (content.type !== 'ghost' && content.type !== 'boss')) return;
-    if (state.door <= [0, 0.10, 0.075, 0.045][level]) return;
-    state.petRun.dogWarned = true;
-    state.runRewards.petTriggers.dog += 1;
-    triggerPetFx('dog', 'dog-warn', level);
-    setToast(ui('镇魂铃响：门后有鬼', 'Bell rings: ghost behind the door'), 1.4);
-  }
-  function maybeRabbitSave() {
-    const pet = activePet();
-    const level = activePetLevel();
-    if (!pet || pet.id !== 'rabbit' || level <= 0 || state.petRun.rabbitUsed) return false;
-    const threshold = [0, 0.92, 0.86, 0.78][level] || 0.92;
-    if (state.danger < threshold) return false;
-    state.petRun.rabbitUsed = true;
-    state.door = Math.max(0, state.door - [0, 0.28, 0.42, 0.58][level]);
-    state.danger = Math.max(0, state.danger - [0, 0.30, 0.45, 0.62][level]);
-    state.snapTarget = 0;
-    state.runRewards.petTriggers.rabbit += 1;
-    triggerPetFx('rabbit', 'rabbit-save', level);
-    setToast(ui('月兔急避：帮你拉回了门', 'Rabbit dash: door pulled back'), 1.5);
-    return true;
-  }
-  function triggerPetFx(petId, kind, level) {
-    state.petFx = { petId, kind, level: level || 1, timer: 1.0, duration: kind === 'evolve' ? 1.25 : 1.0 };
   }
   function rewardRoomClear() {
     state.save.spirit = Math.max(0, Number(state.save.spirit || 0)) + 1;
@@ -598,7 +413,7 @@
     const guaranteed = state.freshSealArmed && state.freshSeals > 0;
     if (guaranteed) state.freshSeals -= 1;
     state.freshSealArmed = false;
-    const dropChance = hasDailySkill('luckyFood') ? 0.76 : 0.58;
+    const dropChance = hasCarriedSkill('luckyFood') ? 0.76 : 0.58;
     if (!guaranteed && Math.random() >= dropChance) {
       setToast(ui('封印成功，但没有留下食材', 'Sealed, but no ingredient remained'), 1.5);
       return;
@@ -633,7 +448,7 @@
 
   function loseRunIngredients() {
     const lost = copyCountMap(state.runRewards.ingredients);
-    if (hasDailySkill('preserveBag')) {
+    if (hasCarriedSkill('preserveBag')) {
       const id = Object.keys(lost).find(key => lost[key] > 0);
       if (id) {
         lost[id] -= 1;
@@ -810,150 +625,16 @@
   }
 
 
-  function skillById(id) {
-    return EVOLUTION_SKILLS.find(s => s.id === id) || EVOLUTION_SKILLS[0];
-  }
-
-  function evolutionLevel(id) {
-    return (state.evolution && state.evolution[id]) || 0;
-  }
-
-  function evolutionTitle(option) {
-    const skill = skillById(option.id);
-    const levelText = isEn() ? EVOLUTION_LEVEL_TEXT_EN[option.nextLevel] : EVOLUTION_LEVEL_TEXT[option.nextLevel];
-    const action = option.type === 'learn'
-      ? ui('学会', 'Learn')
-      : ui('强化', 'Boost');
-    const name = isEn() ? skill.nameEn : skill.name;
-    // 英文版本尽量短，避免技能卡标题溢出。
-    return isEn()
-      ? `${name}${levelText ? ' · ' + levelText : ''}`
-      : `${action}「${name}」${levelText ? ' · ' + levelText : ''}`;
-  }
-
-  function evolutionDesc(option) {
-    const skill = skillById(option.id);
-    const level = option.nextLevel;
-    const base = isEn() ? skill.descEn : skill.desc;
-    const extra = evolutionEffectText(option.id, level);
-    // 如果效果文本已经把机制说清楚，就优先显示效果文本，减少技能框里文字拥挤。
-    return extra || base;
-  }
-
-  function evolutionEffectText(id, level) {
-    const tableZh = {
-      silence: ['音效提示 -30%。', '音效提示 -55%。', '几乎无声，只保留很轻的提示。'],
-      speed: ['逼近速度 +12%。', '逼近速度 +22%。', '逼近速度 +32%。'],
-      weakLight: ['红光提示变弱。', '红光提示明显变弱。', '红光几乎只闪一瞬。'],
-      ambush: ['更常伏在门侧。', '更靠近门边。', '更依赖轮廓判断。'],
-      hideDoor: ['最多露出约55%。', '最多露出约40%。', '最多露出约28%。'],
-      multiShadow: ['双妖怪概率提高。', '双妖怪明显提高。', '多妖怪更常见。']
-    };
-    const tableEn = {
-      silence: ['Sound cues -30%.', 'Sound cues -55%.', 'Almost silent.'],
-      speed: ['Approach speed +12%.', 'Approach speed +22%.', 'Approach speed +32%.'],
-      weakLight: ['Red light becomes weaker.', 'Red light becomes much weaker.', 'Red light barely flashes.'],
-      ambush: ['More often near the door side.', 'Closer to the door edge.', 'More silhouette reading required.'],
-      hideDoor: ['Only about 55% visible.', 'Only about 40% visible.', 'Only about 28% visible.'],
-      multiShadow: ['More double ghosts.', 'Many more double ghosts.', 'Multiple ghosts become common.']
-    };
-    const arr = isEn() ? tableEn[id] : tableZh[id];
-    return arr ? arr[Math.max(0, Math.min(arr.length - 1, level - 1))] : '';
-  }
-
-  function evolutionUnlockedSkills(stage) {
-    return EVOLUTION_SKILLS.filter(s => s.unlockStage <= stage);
-  }
-
-  function makeEvolutionOption(skill, currentLevel) {
-    const nextLevel = Math.min(skill.max, currentLevel + 1);
-    return {
-      id: skill.id,
-      type: currentLevel <= 0 ? 'learn' : 'strengthen',
-      nextLevel
-    };
-  }
-
-  function generateEvolutionOptions(stage) {
-    const unlocked = evolutionUnlockedSkills(stage);
-    const fresh = unlocked
-      .filter(s => evolutionLevel(s.id) <= 0)
-      .map(s => makeEvolutionOption(s, 0));
-    const strengthens = unlocked
-      .filter(s => evolutionLevel(s.id) > 0 && evolutionLevel(s.id) < s.max)
-      .map(s => makeEvolutionOption(s, evolutionLevel(s.id)));
-
-    let pool = [];
-    if (stage <= 1) {
-      pool = fresh.slice();
-    } else if (stage === 2) {
-      pool = fresh.concat(Math.random() < 0.45 ? strengthens : []);
-    } else {
-      // 中后期：优先给一个新技能，再配一个强化；如果新技能学完，就全部强化。
-      pool = fresh.concat(strengthens);
-    }
-
-    if (pool.length < 2) {
-      pool = fresh.concat(strengthens);
-    }
-
-    // 后期如果还有没学会的技能，提高新技能出现概率，保证最终都会慢慢补全。
-    if (stage >= 4 && fresh.length && pool.length >= 2) {
-      pool = fresh.concat(fresh).concat(strengthens);
-    }
-
-    // 去重后抽两个。
-    const unique = [];
-    pool.forEach(o => {
-      const key = `${o.id}_${o.nextLevel}`;
-      if (!unique.some(u => `${u.id}_${u.nextLevel}` === key)) unique.push(o);
-    });
-
-    while (unique.length < 2) {
-      const can = EVOLUTION_SKILLS
-        .filter(s => evolutionLevel(s.id) < s.max && s.unlockStage <= stage)
-        .map(s => makeEvolutionOption(s, evolutionLevel(s.id)));
-      const next = randItem(can.length ? can : EVOLUTION_SKILLS.map(s => makeEvolutionOption(s, evolutionLevel(s.id))));
-      if (!unique.some(u => u.id === next.id && u.nextLevel === next.nextLevel)) unique.push(next);
-      else break;
-    }
-
-    const picked = [];
-    const candidates = unique.slice();
-    while (picked.length < 2 && candidates.length) {
-      const i = Math.floor(Math.random() * candidates.length);
-      picked.push(candidates.splice(i, 1)[0]);
-    }
-    return picked.length >= 2 ? picked : unique.slice(0, 2);
-  }
-
-  function applyEvolution(option) {
-    if (!option) return;
-    const before = evolutionLevel(option.id);
-    state.evolution[option.id] = Math.max(before, option.nextLevel || before + 1);
-  }
-
-  function activeEvolutionText() {
-    const active = EVOLUTION_SKILLS
-      .filter(s => evolutionLevel(s.id) > 0)
-      .map(s => `${isEn() ? s.nameEn : s.name}${evolutionLevel(s.id)}`);
-    return active.length ? active.join(' / ') : ui('暂无', 'None');
-  }
-
   function ghostCountForRoom(room) {
-    const multi = evolutionLevel('multiShadow');
-    if (room < 25 && multi <= 0) return 1;
-
-    const twoBoost = multi * 0.13;
-    const threeBoost = multi * 0.055;
+    if (room < 25) return 1;
 
     if (room < 50) {
-      return Math.random() < 0.34 + twoBoost ? 2 : 1;
+      return Math.random() < 0.34 ? 2 : 1;
     }
 
     const r = Math.random();
-    if (r < 0.22 + threeBoost) return 3;
-    if (r < 0.58 + twoBoost) return 2;
+    if (r < 0.22) return 3;
+    if (r < 0.58) return 2;
     return 1;
   }
 
@@ -1052,12 +733,6 @@
     state.foresight.index = 0;
     state.foresight.timer = 0;
 
-    if (state.foresight.returnTo === 'evolution') {
-      state.pendingEvolutionAfterForesight = false;
-      state.screen = 'evolution';
-      return;
-    }
-
     if (state.foresight.returnTo === 'bossAdvance') {
       state.screen = 'game';
       startCorridorAdvance(state.pendingNextRoom || state.room + 1);
@@ -1103,7 +778,6 @@
     state.snapTarget = null;
     state.draggingDoor = false;
     state.danger = 0;
-    state.petRun.dogWarned = false;
     state.transition = 0;
     state.corridorOffset = 0;
     state.content = takeContentForRoom(state.room);
@@ -1114,7 +788,6 @@
     state.difficulty = difficulty;
     state.testMode = !!testMode;
     state.testZhuyinUsed = false;
-    state.menuHold = null;
     state.audio.doorWasMoving = false;
     state.audio.lastDoor = 0;
     state.audio.ghostCooldown = 0;
@@ -1126,17 +799,10 @@
     state.eyeFx = 0;
     state.bossDefeated = {};
     state.futureQueue = [];
-    state.foresight = { active: false, phase: 'prepare', index: 0, timer: 0, count: 5, perDoorTime: testMode ? 0.58 : 0.46, prepareTime: 1.15, returnTime: 0.65, used: 0, maxPerRun: testMode || hasDailySkill('foresightSkill') ? 99 : 2, returnTo: 'game' };
-    state.pendingEvolutionAfterForesight = false;
-    state.evolution = emptyEvolutionState();
-    state.evolutionOptions = [];
-    state.evolutionHistory = [];
-    state.lastEvolution = null;
-    state.petRun = { rabbitUsed: false, dogWarned: false };
-    state.petFx = null;
+    state.foresight = { active: false, phase: 'prepare', index: 0, timer: 0, count: 5, perDoorTime: testMode ? 0.58 : 0.46, prepareTime: 1.15, returnTime: 0.65, used: 0, maxPerRun: testMode || hasCarriedSkill('foresightSkill') ? 99 : 2, returnTo: 'game' };
     state.runRewards = emptyRunRewards();
     state.freshSealArmed = false;
-    state.freshSeals = hasDailySkill('freshSeal') ? 1 : 0;
+    state.freshSeals = hasCarriedSkill('freshSeal') ? 1 : 0;
     state.skillReadyRoom = {};
     state.reviveUsed = false;
     state.runSucceeded = false;
@@ -1671,7 +1337,7 @@
 
   function gameOver(reason) {
     const reasonText = String(reason || '');
-    if (!state.reviveUsed && hasDailySkill('revive') && (reasonText.includes('鬼冲出来') || reasonText.includes('Boss冲出来'))) {
+    if (!state.reviveUsed && hasCarriedSkill('revive') && (reasonText.includes('鬼冲出来') || reasonText.includes('Boss冲出来'))) {
       state.reviveUsed = true;
       state.door = state.mode === 'bossFight' ? 0.18 : 0;
       state.danger = 0;
@@ -1701,8 +1367,7 @@
 
   function ghostDangerSpeed(g) {
     const typeBoost = g.type === 'thin' ? 1.18 : g.type === 'heavy' ? 0.92 : 1;
-    const speedBoost = [1, 1.12, 1.22, 1.32][evolutionLevel('speed')] || 1;
-    return (g.speed || 1) * typeBoost * speedBoost;
+    return (g.speed || 1) * typeBoost;
   }
 
   function ghostApproachStep() {
@@ -1810,9 +1475,7 @@
       state.door = 0;
 
       // Jay 已取消“封住一个妖变、让另一个生效”的选择系统；妖怪仍随门数自然变强。
-      if (isZhuyin(c.bossGhost) && triggerZhuyinForesightIfPossible(state.pendingNextRoom, 'bossAdvance')) {
-        state.pendingEvolutionAfterForesight = false;
-      } else {
+      if (!isZhuyin(c.bossGhost) || !triggerZhuyinForesightIfPossible(state.pendingNextRoom, 'bossAdvance')) {
         startCorridorAdvance(state.pendingNextRoom);
       }
       setToast(null);
@@ -1833,16 +1496,6 @@
     state.t += dt;
     updateAudio(dt);
 
-    if (state.screen === 'menu' && state.menuHold && state.menuHold.active && state.pointer.down) {
-      state.menuHold.time += dt;
-      if (!state.menuHold.triggered && state.menuHold.time >= 1.15) {
-        state.menuHold.triggered = true;
-        setPressed(null);
-        startRun('normal', true);
-        return;
-      }
-    }
-
     if (state.screen === 'preload') {
       state.preloadElapsed += dt;
       const p = preloadProgress();
@@ -1861,10 +1514,6 @@
     if (state.toast) {
       state.toast.time -= dt;
       if (state.toast.time <= 0) state.toast = null;
-    }
-    if (state.petFx) {
-      state.petFx.timer -= dt;
-      if (state.petFx.timer <= 0) state.petFx = null;
     }
     if (state.ghostEye > 0 && state.screen === 'game') state.ghostEye = Math.max(0, state.ghostEye - dt);
     if (state.eyeFx > 0 && state.screen === 'game') state.eyeFx = Math.max(0, state.eyeFx - dt);
@@ -1961,11 +1610,10 @@
     }
 
     if (state.screen === 'menu') return handleMenuDown(p);
-    if (state.screen === 'difficulty') return handleDifficultyDown(p);
+    if (state.screen === 'prepare') return handlePrepareDown(p);
     if (state.screen === 'rules') return handleRulesDown(p);
     if (state.screen === 'gallery') return handleGalleryDown(p);
     if (state.screen === 'pets') return handlePetsDown(p);
-    if (state.screen === 'evolution') return handleEvolutionDown(p);
     if (state.screen === 'result') return handleResultDown(p);
     if (state.screen !== 'game') return;
 
@@ -2077,18 +1725,6 @@
   function onPointerUp(e) {
     const p = getPointer(e);
 
-    if (state.screen === 'menu' && state.menuHold && state.menuHold.active) {
-      const b = menuButtons();
-      const shouldStart = !state.menuHold.triggered && hit(p, inflate(b.start, 10));
-      state.menuHold = null;
-      state.pointer = { x: p.x, y: p.y, down: false };
-      state.pressed = null;
-      if (shouldStart) {
-        startRun('normal', false);
-      }
-      return;
-    }
-
     if (state.screen === 'pets' && state.kitchenTab === 'cook' && state.kitchenDrag) finishKitchenDrag(p);
     state.pointer = { x: p.x, y: p.y, down: false };
     state.pressed = null;
@@ -2135,16 +1771,14 @@
 
   function handleMenuDown(p) {
     const b = menuButtons();
-    state.menuHold = null;
     if (hit(p, inflate(b.lang, 8))) {
       setPressed('lang');
       state.lang = state.lang === 'zh' ? 'en' : 'zh';
       return;
     }
     if (hit(p, inflate(b.start, 10))) {
-      // 短按：正常开始；长按约1.15秒：进入烛阴测试模式。
       setPressed('start');
-      state.menuHold = { active: true, time: 0, triggered: false };
+      openRunPreparation();
     } else if (hit(p, inflate(b.rules, 10))) {
       setPressed('rules');
       state.screen = 'rules';
@@ -2152,7 +1786,6 @@
       setPressed('pets');
       state.petScroll = 0;
       state.kitchenTab = 'cook';
-      state.kitchenSelected = [];
       state.save.petHouseSeen = true;
       saveGame();
       state.screen = 'pets';
@@ -2163,8 +1796,56 @@
     }
   }
 
-  function handleDifficultyDown(p) {
-    state.screen = 'menu';
+  function openRunPreparation() {
+    hasDailySkill('__refresh__');
+    const owned = state.save.dailySkills.ids || [];
+    const saved = state.save.dailySkills.loadout || [];
+    state.runLoadout = saved.filter(id => owned.includes(id)).slice(0, 3);
+    state.screen = 'prepare';
+  }
+
+  function prepareSkillRects() {
+    const l = state.layout;
+    const owned = (state.save.dailySkills.ids || []).map(dailySkillById).filter(Boolean);
+    const gap = 12;
+    const margin = 20;
+    const w = (l.w - margin * 2 - gap) / 2;
+    return owned.map((skill, i) => ({ skill, x: margin + (i % 2) * (w + gap), y: 188 + Math.floor(i / 2) * 116, w, h: 102 }));
+  }
+
+  function prepareButtons() {
+    const l = state.layout;
+    const w = Math.min(280, l.w - 44);
+    const x = (l.w - w) / 2;
+    return {
+      start: { x, y: l.h - 138, w, h: 54 },
+      back: { x, y: l.h - 72, w, h: 46 }
+    };
+  }
+
+  function handlePrepareDown(p) {
+    for (const r of prepareSkillRects()) {
+      if (!hit(p, inflate(r, 5))) continue;
+      const id = r.skill.id;
+      const selected = state.runLoadout.includes(id);
+      if (selected) state.runLoadout = state.runLoadout.filter(item => item !== id);
+      else if (state.runLoadout.length < 3) state.runLoadout.push(id);
+      else setToast(ui('每局最多携带 3 个技能', 'Carry up to 3 skills per run'), 1.3);
+      state.save.dailySkills.loadout = state.runLoadout.slice();
+      saveGame();
+      setPressed(`prepare-${id}`);
+      return;
+    }
+    const buttons = prepareButtons();
+    if (hit(p, inflate(buttons.start, 8))) {
+      setPressed('prepareStart');
+      state.save.dailySkills.loadout = state.runLoadout.slice();
+      saveGame();
+      startRun('normal', false);
+    } else if (hit(p, inflate(buttons.back, 8))) {
+      setPressed('prepareBack');
+      state.screen = 'menu';
+    }
   }
 
   function handleRulesDown(p) {
@@ -2237,10 +1918,15 @@
       state.petDragging = false;
       return;
     }
+    if (hit(p, inflate(kitchenPrepareRect(), 7))) {
+      setPressed('kitchenPrepare');
+      state.kitchenDrag = null;
+      openRunPreparation();
+      return;
+    }
     const tabs = kitchenTabRects();
     if (hit(p, inflate(tabs.cook, 5))) {
       state.kitchenTab = 'cook';
-      state.kitchenSelected = [];
       state.kitchenDrag = null;
       setPressed('kitchenCookTab');
       return;
@@ -2278,60 +1964,6 @@
       state.petDragStartScroll = state.petScroll;
     }
   }
-
-
-  function evolutionOptionRects() {
-    const l = state.layout;
-    const margin = Math.max(24, l.w * 0.08);
-    const w = l.w - margin * 2;
-    const h = Math.min(148, Math.max(126, l.h * 0.17));
-    const y1 = l.h * 0.38;
-    return [
-      { x: margin, y: y1, w, h },
-      { x: margin, y: y1 + h + 22, w, h }
-    ];
-  }
-
-  function handleEvolutionDown(p) {
-    const rects = evolutionOptionRects();
-    if (hit(p, inflate(rects[0], 8))) {
-      setPressed('evo0');
-      chooseEvolution(0);
-      return;
-    }
-    if (hit(p, inflate(rects[1], 8))) {
-      setPressed('evo1');
-      chooseEvolution(1);
-      return;
-    }
-  }
-
-  function chooseEvolution(index) {
-    const opts = state.evolutionOptions || [];
-    if (opts.length < 2) {
-      state.screen = 'game';
-      startCorridorAdvance(state.pendingNextRoom || state.room + 1);
-      return;
-    }
-
-    const sealed = opts[index];
-    const applied = opts[index === 0 ? 1 : 0];
-    applyEvolution(applied);
-
-    state.lastEvolution = { sealed, applied, room: state.room };
-    state.evolutionHistory.push(state.lastEvolution);
-
-    const sealedSkill = skillById(sealed.id);
-    const appliedSkill = skillById(applied.id);
-    setToast(
-      ui(`封印${sealedSkill.name}，妖怪获得${appliedSkill.name}`, `Sealed ${sealedSkill.nameEn}. Ghosts gained ${appliedSkill.nameEn}.`),
-      1.8
-    );
-
-    state.screen = 'game';
-    startCorridorAdvance(state.pendingNextRoom || state.room + 1);
-  }
-
   function handleResultDown(p) {
     const l = state.layout;
     const bw = Math.min(260, l.w * 0.68);
@@ -2342,17 +1974,13 @@
     const home = { x, y: baseY + 124, w: bw, h: 52 };
     if (hit(p, inflate(again, 10))) {
       setPressed('again');
-      state.save.petHouseSeen = true;
-      state.petScroll = 0;
-      state.kitchenTab = 'skills';
-      state.screen = 'pets';
+      openRunPreparation();
     } else if (hit(p, inflate(pets, 10))) {
       setPressed('petsResult');
       state.save.petHouseSeen = true;
       saveGame();
       state.petScroll = 0;
       state.kitchenTab = 'cook';
-      state.kitchenSelected = [];
       state.screen = 'pets';
     } else if (hit(p, inflate(home, 10))) {
       setPressed('homeResult');
@@ -2372,10 +2000,10 @@
     try {
       if (state.screen === 'preload') drawPreload();
       else if (state.screen === 'menu') drawMenu();
+      else if (state.screen === 'prepare') drawPrepare();
       else if (state.screen === 'rules') drawRules();
       else if (state.screen === 'gallery') drawGallery();
       else if (state.screen === 'pets') drawPetHouse();
-      else if (state.screen === 'evolution') drawEvolution();
       else if (state.screen === 'foresight') drawForesight();
       else if (state.screen === 'game') drawGame();
       else if (state.screen === 'result') drawResult();
@@ -2492,24 +2120,59 @@
     drawUIButton(b.pets, isEn() ? 'Kitchen' : '厨房', kitchenMenuSub(), 'pets');
     drawUIButton(b.gallery, isEn() ? `Archive ${collectCountText()}` : `图鉴 ${collectCountText()}`, '', 'gallery');
 
+  }
+
+  function drawPrepare() {
+    const l = state.layout;
+    drawMenuBackground();
     ctx.save();
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 5;
+    roundRect(20, 78, l.w - 40, 90, 22, true, true, 5);
+    ctx.fillStyle = '#111';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(0,0,0,0.52)';
-    ctx.font = '800 11px system-ui, sans-serif';
-    ctx.fillText(ui('长按开始游戏：烛阴测试模式', 'Hold Start: Zhuyin test mode'), l.w / 2, b.gallery.y + b.gallery.h + 26);
-
-    if (state.menuHold && state.menuHold.active && isPressed('start')) {
-      const ratio = clamp(state.menuHold.time / 1.15, 0, 1);
-      const barW = b.start.w - 30;
-      const barX = b.start.x + 15;
-      const barY = b.start.y + b.start.h - 9;
-      ctx.fillStyle = 'rgba(0,0,0,0.16)';
-      roundRect(barX, barY, barW, 5, 3, true, false, 0);
-      ctx.fillStyle = '#111';
-      roundRect(barX, barY, barW * ratio, 5, 3, true, false, 0);
-    }
+    ctx.font = '900 30px system-ui, sans-serif';
+    ctx.fillText(ui('出发准备', 'Run Loadout'), l.w / 2, 112);
+    ctx.font = '700 12px system-ui, sans-serif';
+    ctx.fillText(ui(`选择本局携带技能 ${state.runLoadout.length}/3`, `Choose carried skills ${state.runLoadout.length}/3`), l.w / 2, 145);
     ctx.restore();
+
+    const rects = prepareSkillRects();
+    if (!rects.length) {
+      ctx.save();
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'center';
+      ctx.font = '800 14px system-ui, sans-serif';
+      wrapText(ui('今天还没有技能，也可以直接出发。料理出售后可在厨房购买技能。', 'No skills owned today. You can still depart, or sell dishes and buy skills in the kitchen.'), l.w / 2, 240, l.w - 70, 22, 'center');
+      ctx.restore();
+    }
+    rects.forEach(r => drawPrepareSkillCard(r));
+
+    const buttons = prepareButtons();
+    drawUIButton(buttons.start, ui('开始巡夜', 'Start Patrol'), ui(`已携带 ${state.runLoadout.length} 个技能`, `${state.runLoadout.length} skills carried`), 'prepareStart');
+    drawUIButton(buttons.back, ui('返回门口', 'Back to Entrance'), '', 'prepareBack');
+  }
+
+  function drawPrepareSkillCard(r) {
+    const selected = state.runLoadout.includes(r.skill.id);
+    drawPressTransform(r, `prepare-${r.skill.id}`, () => {
+      ctx.fillStyle = selected ? '#111' : '#fffdf6';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 4;
+      roundRect(r.x, r.y, r.w, r.h, 16, true, true, 4);
+      ctx.fillStyle = selected ? '#fffdf6' : '#111';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.font = '900 15px system-ui, sans-serif';
+      ctx.fillText(isEn() ? r.skill.nameEn : r.skill.name, r.x + 12, r.y + 12, r.w - 24);
+      ctx.font = '700 10.5px system-ui, sans-serif';
+      wrapText(isEn() ? r.skill.descEn : r.skill.desc, r.x + 12, r.y + 38, r.w - 24, 14, 'left');
+      ctx.textAlign = 'right';
+      ctx.font = '900 11px system-ui, sans-serif';
+      ctx.fillText(selected ? ui('已携带', 'CARRIED') : ui('点选携带', 'TAP TO CARRY'), r.x + r.w - 12, r.y + r.h - 17);
+    });
   }
 
   function drawMenuBackground() {
@@ -2696,7 +2359,6 @@
     drawTopUI();
     drawGhostEyeFx();
     drawBottomControls();
-    drawPetFx();
     drawToast();
   }
 
@@ -2846,40 +2508,27 @@
       const px = door.x + door.w / 2 + door.w * (p.gameOffsetX || 0);
       const pfloor = floorY + door.h * (p.gameOffsetY || 0);
       const pHeight = door.h * 0.50 * (p.gameScale || 1);
-      const pet = petForAnimal(p.name);
-      if (pet && petSave(pet.id).met) drawPetCharacter(pet, p, px, pfloor, pHeight, 'person', 1);
-      else drawCharacter(p, px, pfloor, pHeight, 'person', 1);
+      drawCharacter(p, px, pfloor, pHeight, 'person', 1);
+      drawChefHat(px, pfloor - pHeight * 0.78, pHeight * 0.34);
     } else if (content.type === 'ghost') {
       const count = content.ghosts.length;
       const approach = content === state.content ? ghostApproachStep() : 0;
       const dangerScale = 1 + approach * 0.68;
       const baseH = door.h * (count === 1 ? 0.56 : count === 2 ? 0.45 : 0.36);
       const spread = door.w * (count === 1 ? 0 : count === 2 ? 0.25 : 0.30);
-      const ambushShift = door.w * ([0, 0.13, 0.21, 0.29][evolutionLevel('ambush')] || 0);
-      const hideShift = door.w * ([0, 0.12, 0.23, 0.34][evolutionLevel('hideDoor')] || 0);
-      const visibleRatio = [1, 0.55, 0.40, 0.28][evolutionLevel('hideDoor')] || 1;
 
       content.ghosts.forEach((g, i) => {
         const gxBase = door.x + door.w / 2 + (count === 1 ? 0 : (i - (count - 1) / 2) * spread);
-        const gx = gxBase - ambushShift - hideShift;
+        const gx = gxBase;
         const gh = baseH * dangerScale;
         drawGhostWarningGlow(gx, floorY - gh * 0.52, gh);
-        ctx.save();
-        if (visibleRatio < 1) {
-          const clipW = door.w * visibleRatio;
-          ctx.beginPath();
-          ctx.rect(door.x, door.y, clipW, door.h);
-          ctx.clip();
-        }
         drawCharacter(g, gx, floorY, baseH, 'ghost', dangerScale);
-        ctx.restore();
         drawGhostFires(g, gx, floorY - gh * 0.55, gh, Math.max(1, g.fire || 1), i);
       });
     } else if (content.type === 'boss') {
       const approach = state.mode === 'bossFight' && content === state.content ? Math.floor(state.door * 8) / 8 : 0;
       const scale = state.mode === 'bossFight' && content === state.content ? 1 + approach * 0.45 : 1;
-      const ambushShift = door.w * ([0, 0.08, 0.14, 0.20][evolutionLevel('ambush')] || 0);
-      const bx = door.x + door.w / 2 - ambushShift;
+      const bx = door.x + door.w / 2;
       drawCharacter(content.bossGhost, bx, floorY + door.h * 0.02, door.h * 0.70, 'boss', scale);
       drawGhostFires(content.bossGhost, bx, floorY - door.h * 0.50, door.h * 0.74, (content.bossGhost.fire || 3) + 2, 9);
     }
@@ -2924,11 +2573,8 @@
 
 
   function drawGhostWarningGlow(cx, cy, bodyH) {
-    const weak = evolutionLevel('weakLight');
-    const alpha = [0.26, 0.18, 0.11, 0.055][weak] ?? 0.26;
-    if (alpha <= 0.02) return;
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = 0.26;
     const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, bodyH * 0.72);
     g.addColorStop(0, 'rgba(255,28,10,0.95)');
     g.addColorStop(0.55, 'rgba(255,28,10,0.22)');
@@ -2984,7 +2630,7 @@
     const hpRatio = 1 - (content.hits || 0) / content.cfg.seals;
     const fast = hpRatio < 0.3 ? 1 : 0.35;
     ctx.save();
-    ctx.globalAlpha = (state.mode === 'bossFight' ? 0.48 + pulse * fast * 0.24 : 0.34) * ([1, 0.72, 0.48, 0.28][evolutionLevel('weakLight')] || 1);
+    ctx.globalAlpha = state.mode === 'bossFight' ? 0.48 + pulse * fast * 0.24 : 0.34;
     const g = ctx.createRadialGradient(hole.x + hole.w / 2, hole.y + hole.h / 2, 10, hole.x + hole.w / 2, hole.y + hole.h / 2, hole.w * 0.82);
     g.addColorStop(0, 'rgba(255,28,10,0.95)');
     g.addColorStop(0.48, 'rgba(255,28,10,0.28)');
@@ -3318,9 +2964,9 @@
   function runSkillButtonRects() {
     const l = state.layout;
     const ids = [];
-    if (hasDailySkill('freshSeal')) ids.push('freshSeal');
-    if (hasDailySkill('ghostEyeSkill')) ids.push('ghostEyeSkill');
-    if (hasDailySkill('foresightSkill')) ids.push('foresightSkill');
+    if (hasCarriedSkill('freshSeal')) ids.push('freshSeal');
+    if (hasCarriedSkill('ghostEyeSkill')) ids.push('ghostEyeSkill');
+    if (hasCarriedSkill('foresightSkill')) ids.push('foresightSkill');
     if (!ids.length) return [];
     const gap = 7;
     const margin = 12;
@@ -3394,87 +3040,6 @@
     ctx.restore();
   }
 
-  function drawActivePetCompanion() {
-    const pet = activePet();
-    const level = activePetLevel();
-    if (!pet || level <= 0 || state.screen !== 'game') return;
-    const l = state.layout;
-    const size = Math.min(72, Math.max(54, l.w * 0.13));
-    const r = { x: 18, y: l.gameBottom - size - 12, w: size, h: size };
-    ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
-    roundRect(r.x, r.y, r.w, r.h, 16, true, true, 3);
-    drawPetPortrait(pet, { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: r.h - 8 });
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '900 10px system-ui, sans-serif';
-    ctx.fillText(`Lv${level}`, r.x + r.w / 2, r.y + r.h - 8);
-    ctx.restore();
-  }
-
-  function drawPetFx() {
-    const fx = state.petFx;
-    if (!fx) return;
-    const l = state.layout;
-    const p = clamp(fx.timer / Math.max(0.1, fx.duration || 1), 0, 1);
-    const rise = 1 - p;
-    ctx.save();
-    if (fx.kind === 'rabbit-save' || fx.kind === 'evolve') {
-      ctx.globalAlpha = p * 0.72;
-      ctx.fillStyle = 'rgba(255,255,255,0.72)';
-      ctx.fillRect(0, l.topH, l.w, l.h - l.topH);
-      const cx = l.door.x + l.door.w / 2;
-      const cy = l.door.y + l.door.h * 0.42;
-      ctx.strokeStyle = '#111';
-      ctx.fillStyle = 'rgba(255,255,255,0.88)';
-      ctx.lineWidth = 3;
-      for (let i = 0; i < 7; i++) {
-        const a = state.t * 4 + i * Math.PI * 2 / 7;
-        const rr = l.door.w * (0.24 + rise * 0.30);
-        ctx.beginPath();
-        ctx.ellipse(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.55, 8 + fx.level * 2, 15 + fx.level * 3, a, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-    } else if (fx.kind === 'dog-warn') {
-      const cx = l.door.x + l.door.w * 0.82;
-      const cy = l.door.y + l.door.h * 0.35;
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
-      ctx.globalAlpha = p;
-      for (let i = 0; i < 3; i++) {
-        const rr = l.door.w * (0.08 + rise * 0.26 + i * 0.07);
-        ctx.beginPath();
-        ctx.arc(cx, cy, rr, -0.9, 0.9);
-        ctx.stroke();
-      }
-      ctx.fillStyle = '#fff3d6';
-      ctx.beginPath();
-      ctx.arc(cx, cy, 10 + fx.level * 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else if (fx.kind === 'owl-danger' || fx.kind === 'owl-safe') {
-      const cx = l.w / 2;
-      const cy = l.topH - 34;
-      ctx.globalAlpha = p * 0.92;
-      ctx.strokeStyle = fx.kind === 'owl-danger' ? '#111' : 'rgba(0,0,0,0.62)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(cx - 48, cy);
-      ctx.quadraticCurveTo(cx, cy - 24 - rise * 12, cx + 48, cy);
-      ctx.quadraticCurveTo(cx, cy + 24 + rise * 12, cx - 48, cy);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx, cy, 10 + fx.level * 2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
   function drawGhostEyeFx() {
     if (state.eyeFx <= 0) return;
     const l = state.layout;
@@ -3534,11 +3099,6 @@
       '符咒贴上去了': 'Seal placed.',
       'Boss已封印，进入下一大关': 'Boss sealed. Next stage unlocked.',
       'Boss逃走了': 'Boss escaped.',
-      '猫头鹰凝视：门后有异常': 'Owl gaze: abnormal presence',
-      '猫头鹰凝视：这门很安静': 'Owl gaze: quiet door',
-      '镇魂铃响：门后有鬼': 'Bell rings: ghost behind the door',
-      '月兔急避：帮你拉回了门': 'Rabbit dash: door pulled back',
-      '已取消出战': 'Pet unequipped',
       '先在门后遇见它': 'Meet it behind a door first'
     };
     return map[zh] || zh;
@@ -3563,8 +3123,8 @@
       '7. Tap Return during a run to stop safely and bring ingredients to the kitchen. Failure loses run ingredients.',
       '8. Drag or tap ingredients into kitchen slots, then choose Stir-fry or Steam. Failed experiments consume ingredients.',
       '9. Cooking places a dish on the serving counter. Selling is a separate action.',
-      '10. Every finished run refreshes a random skill shop. Skills are level 1, fixed-price, and last until local midnight.',
-      '11. Animals are kitchen helpers only and never join patrol runs.',
+      '10. Every finished run refreshes the skill shop. Bought skills last until local midnight; choose up to 3 before each patrol.',
+      '11. Animals wear chef hats and grow as kitchen teams only. They never join patrol runs.',
       '12. Sealing the Nine-tailed Fox opens Ghost Eye for 10 seconds.',
       '13. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
       '14. Zhuyin is a rare boss-like spirit. Sealing it briefly reveals future doors.'
@@ -3578,8 +3138,8 @@
       '7. 闯关时点击“收工”就是见好就收，食材安全送进厨房；失败会清空本局食材。',
       '8. 在厨房把食材拖入或点入料理格，再选择炒锅或蒸笼；实验失败也会消耗食材。',
       '9. 做好的料理先进入出餐台，玩家再单独点击出售。',
-      '10. 每局结束刷新随机技能商店；技能只有一级、价格固定，当天持续生效并在本地00:00清空。',
-      '11. 小动物只作为厨房帮工保留，不再进入巡夜提供局内效果。',
+      '10. 每局结束刷新技能商店；买下的技能当天拥有，并在每次出发前选择最多3个携带，00:00清空。',
+      '11. 小动物统一戴厨师帽，只作为厨房队伍累计，不再进入巡夜提供局内效果。',
       '12. 封印九尾狐后开启10秒鬼眼，门会变透明。',
       '13. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
       '14. 烛阴是极少现身的Boss级妖怪，封印后会短暂照见未来几扇门。'
@@ -3687,8 +3247,10 @@
     ctx.beginPath();
     ctx.rect(imageBox.x, imageBox.y, imageBox.w, imageBox.h);
     ctx.clip();
-    if (seen) drawCardImage(item, imageBox);
-    else drawUnknownEgg(imageBox, r.w);
+    if (seen) {
+      drawCardImage(item, imageBox);
+      if (state.galleryTab === 'people') drawChefHat(imageBox.x + imageBox.w / 2, imageBox.y + imageBox.h * 0.18, Math.min(imageBox.w, imageBox.h) * 0.32);
+    } else drawUnknownEgg(imageBox, r.w);
     ctx.restore();
 
     ctx.save();
@@ -3706,66 +3268,29 @@
     ctx.restore();
   }
 
-  function drawPetCharacter(pet, def, x, floorY, targetH, kind, scale = 1) {
-    drawCharacter(def, x, floorY, targetH, kind, scale);
-    const level = petLevel(pet.id);
-    if (level <= 1) return;
-    drawPetFormEffects(pet, level, x, floorY - targetH * 0.42, targetH * scale);
-  }
-
-  function drawPetFormEffects(pet, level, cx, cy, size) {
-    if (level <= 1) return;
+  function drawChefHat(cx, cy, size) {
     ctx.save();
-    const pulse = 0.5 + Math.sin(state.t * 4.2) * 0.5;
-    const s = Math.max(24, size);
-    ctx.globalAlpha = 0.72;
+    const s = Math.max(18, size);
+    ctx.fillStyle = '#fffdf6';
     ctx.strokeStyle = '#111';
-    ctx.lineWidth = Math.max(2, s * 0.035);
-    ctx.beginPath();
-    ctx.arc(cx, cy, s * (level >= 3 ? 0.58 : 0.47), 0, Math.PI * 2);
-    ctx.stroke();
-
-    if (pet.id === 'rabbit') {
-      ctx.fillStyle = level >= 3 ? 'rgba(235,242,255,0.92)' : 'rgba(255,255,255,0.86)';
-      for (let i = 0; i < (level >= 3 ? 5 : 3); i++) {
-        const a = state.t * 1.5 + i * Math.PI * 2 / (level >= 3 ? 5 : 3);
-        ctx.beginPath();
-        ctx.ellipse(cx + Math.cos(a) * s * 0.45, cy + Math.sin(a) * s * 0.28, s * 0.07, s * 0.12, a, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-    } else if (pet.id === 'dog') {
-      ctx.fillStyle = '#fff3d6';
+    ctx.lineWidth = Math.max(2, s * 0.05);
+    const puffY = cy - s * 0.16;
+    [-0.24, 0, 0.24].forEach((offset, index) => {
       ctx.beginPath();
-      ctx.arc(cx, cy - s * 0.43, s * (level >= 3 ? 0.14 : 0.10), 0, Math.PI * 2);
+      ctx.arc(cx + s * offset, puffY - (index === 1 ? s * 0.12 : 0), s * 0.26, Math.PI, 0);
+      ctx.lineTo(cx + s * (offset + 0.24), cy + s * 0.18);
+      ctx.lineTo(cx + s * (offset - 0.24), cy + s * 0.18);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      if (level >= 3) {
-        ctx.beginPath();
-        ctx.moveTo(cx - s * 0.34, cy - s * 0.22);
-        ctx.lineTo(cx + s * 0.34, cy - s * 0.22);
-        ctx.lineTo(cx + s * 0.24, cy + s * 0.16);
-        ctx.lineTo(cx - s * 0.24, cy + s * 0.16);
-        ctx.closePath();
-        ctx.globalAlpha = 0.36 + pulse * 0.2;
-        ctx.fill();
-        ctx.stroke();
-      }
-    } else if (pet.id === 'owl') {
-      ctx.fillStyle = level >= 3 ? 'rgba(220,246,255,0.86)' : 'rgba(255,255,255,0.82)';
-      [-1, 1].forEach(side => {
-        ctx.beginPath();
-        ctx.arc(cx + side * s * 0.22, cy - s * 0.20, s * 0.09, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      });
-      if (level >= 3) {
-        ctx.beginPath();
-        ctx.moveTo(cx - s * 0.52, cy + s * 0.02);
-        ctx.quadraticCurveTo(cx, cy - s * (0.40 + pulse * 0.08), cx + s * 0.52, cy + s * 0.02);
-        ctx.stroke();
-      }
-    }
+    });
+    ctx.fillStyle = '#fffdf6';
+    ctx.beginPath();
+    ctx.rect(cx - s * 0.46, cy + s * 0.08, s * 0.92, s * 0.25);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#b72820';
+    ctx.fillRect(cx - s * 0.42, cy + s * 0.20, s * 0.84, s * 0.07);
     ctx.restore();
   }
 
@@ -3790,31 +3315,27 @@
     drawTab(tabs.skills, ui('今日技能', 'Skills'), state.kitchenTab === 'skills');
     drawTab(tabs.chefs, ui('小厨师队', 'Chef Teams'), state.kitchenTab === 'chefs');
 
-    if (state.kitchenTab === 'cook') {
-      drawKitchenCook();
-      return;
-    }
-    if (state.kitchenTab === 'skills') {
-      drawKitchenSkills();
-      return;
-    }
+    if (state.kitchenTab === 'cook') drawKitchenCook();
+    else if (state.kitchenTab === 'skills') drawKitchenSkills();
+    else {
+      ctx.save();
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'center';
+      ctx.font = '700 11px system-ui, sans-serif';
+      ctx.fillText(ui('小动物只在厨房帮忙，不再进入巡夜', 'Animals stay in the kitchen and do not join runs'), l.w / 2, 140);
+      ctx.restore();
 
-    ctx.save();
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.font = '700 11px system-ui, sans-serif';
-    ctx.fillText(ui('小动物只在厨房帮忙，不再进入巡夜', 'Animals stay in the kitchen and do not join runs'), l.w / 2, 140);
-    ctx.restore();
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 146, l.w, l.h - 146);
-    ctx.clip();
-    petCardRects().forEach(r => {
-      if (r.y > l.h || r.y + r.h < 146) return;
-      drawPetCard(r, r.pet);
-    });
-    ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 146, l.w, l.h - 218);
+      ctx.clip();
+      petCardRects().forEach(r => {
+        if (r.y > l.h || r.y + r.h < 146) return;
+        drawPetCard(r, r.pet);
+      });
+      ctx.restore();
+    }
+    drawUIButton(kitchenPrepareRect(), ui('去准备巡夜', 'Prepare Patrol'), ui('选择本局携带技能', 'Choose carried skills'), 'kitchenPrepare');
   }
 
   function kitchenTabRects() {
@@ -3879,6 +3400,11 @@
   function kitchenUpgradeRect() {
     const l = state.layout;
     return { x: 22, y: 628, w: l.w - 44, h: 58 };
+  }
+
+  function kitchenPrepareRect() {
+    const l = state.layout;
+    return { x: l.w / 2 - 124, y: l.h - 66, w: 248, h: 52 };
   }
 
   function kitchenSkillRects() {
@@ -4045,7 +3571,7 @@
       return;
     }
     if (state.save.dailySkills.ids.includes(skill.id)) {
-      setToast(ui('这个技能今天已经生效', 'This skill is already active today'), 1.2);
+      setToast(ui('这个技能今天已经拥有，出发前可以携带', 'Already owned today; carry it before a run'), 1.2);
       return;
     }
     if ((state.save.coins || 0) < skill.price) {
@@ -4056,7 +3582,7 @@
     state.save.dailySkills.ids.push(skill.id);
     state.save.dailySkills.offers = state.save.dailySkills.offers.filter(id => id !== skill.id);
     saveGame();
-    setToast(ui(`${skill.name}今日生效`, `${skill.nameEn} active today`), 1.5);
+    setToast(ui(`${skill.name}已加入今日技能库`, `${skill.nameEn} added to today’s skill pool`), 1.5);
   }
 
   function drawKitchenCook() {
@@ -4204,9 +3730,9 @@
     ctx.fillStyle = '#111';
     ctx.textAlign = 'center';
     ctx.font = '900 17px system-ui, sans-serif';
-    ctx.fillText(ui('本局随机技能商店', 'Run Skill Shop'), l.w / 2, 150);
+    ctx.fillText(ui('今日技能商店', 'Today’s Skill Shop'), l.w / 2, 150);
     ctx.font = '700 11px system-ui, sans-serif';
-    ctx.fillText(ui('每局结束刷新 · 价格固定 · 本地00:00清空', 'Refreshes after each run · resets at midnight'), l.w / 2, 620, l.w - 36);
+    ctx.fillText(ui('每局结束刷新 · 购买后在出发准备中携带 · 00:00清空', 'Refreshes after each run · equip before patrol · resets at midnight'), l.w / 2, 620, l.w - 36);
     const owned = state.save.dailySkills.ids.map(dailySkillById).filter(Boolean).map(skill => isEn() ? skill.nameEn : skill.name);
     ctx.fillText(ui(`今日已学会：${owned.length ? owned.join('、') : '暂无'}`, `Owned today: ${owned.length ? owned.join(', ') : 'None'}`), l.w / 2, 646, l.w - 36);
     ctx.restore();
@@ -4246,7 +3772,7 @@
     wrapText(isEn() ? r.skill.descEn : r.skill.desc, r.x + 14, r.y + 36, r.w - 128, 16, 'left');
     ctx.textAlign = 'right';
     ctx.font = '900 12px system-ui, sans-serif';
-    const status = active ? ui('今日生效', 'ACTIVE') : ui(`${r.skill.price} 铜钱`, `${r.skill.price} coins`);
+    const status = active ? ui('今日已拥有', 'OWNED TODAY') : ui(`${r.skill.price} 铜钱`, `${r.skill.price} coins`);
     ctx.fillText(status, r.x + r.w - 14, r.y + 34);
     ctx.restore();
   }
@@ -4254,86 +3780,42 @@
   function drawPetCard(r, pet) {
     const ps = petSave(pet.id);
     const met = !!ps.met;
-    const level = petLevel(pet.id);
-    const active = false;
 
     drawPressTransform(r, `pet-${pet.id}`, () => {
-      ctx.fillStyle = active ? '#111' : '#fffdf6';
+      ctx.fillStyle = '#fffdf6';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 4;
       roundRect(r.x, r.y, r.w, r.h, 18, true, true, 4);
 
       const portrait = { x: r.x + 14, y: r.y + 14, w: Math.min(104, r.h - 28), h: r.h - 28 };
       ctx.save();
-      ctx.fillStyle = active ? '#fffdf6' : pet.tint;
+      ctx.fillStyle = pet.tint;
       roundRect(portrait.x, portrait.y, portrait.w, portrait.h, 14, true, false, 0);
-      if (met) drawPetPortrait(pet, portrait);
-      else drawUnknownEgg(portrait, portrait.w);
+      ctx.globalAlpha = met ? 1 : 0.42;
+      drawPetPortrait(pet, portrait);
       ctx.restore();
 
       const tx = portrait.x + portrait.w + 16;
       const tw = r.x + r.w - tx - 16;
-      ctx.fillStyle = active ? '#fffdf6' : '#111';
+      ctx.fillStyle = '#111';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.font = '900 19px system-ui, sans-serif';
-      ctx.fillText(met ? petFormName(pet) : ui('尚未结缘', 'Not met'), tx, r.y + 18, tw);
+      ctx.fillText(met ? (isEn() ? pet.nameEn : pet.name) : ui('尚未加入', 'Not joined'), tx, r.y + 18, tw);
       ctx.font = '800 12px system-ui, sans-serif';
-      ctx.fillText(met ? ui(`等级 ${level}  经验 ${ps.xp}`, `Lv ${level}  XP ${ps.xp}`) : ui(`在门后遇见${pet.name}`, `Find ${pet.nameEn} behind a door`), tx, r.y + 45, tw);
+      ctx.fillText(met ? ui(`厨房队伍 ×${ps.count}`, `Kitchen team ×${ps.count}`) : ui(`在门后遇见${pet.animalName}`, `Meet ${pet.animalName} behind a door`), tx, r.y + 45, tw);
       ctx.font = '700 12px system-ui, sans-serif';
-      wrapText(met ? petGrowthText(pet) : ui('结缘后加入厨房团队，不进入巡夜。', 'After meeting, it joins the kitchen team only.'), tx, r.y + 68, tw, 15, 'left');
-      if (met) drawPetGrowthBar(tx, r.y + r.h - 42, tw, pet);
+      wrapText(met ? (isEn() ? pet.roleEn : pet.role) : ui('加入后只在厨房帮忙，不进入巡夜。', 'Joins the kitchen only and never enters a run.'), tx, r.y + 68, tw, 16, 'left');
       ctx.font = '900 12px system-ui, sans-serif';
-      const status = !met ? ui('未结缘', 'Locked') : petXpToNext(pet.id) > 0 ? ui(`厨房帮工 · 距成长 ${petXpToNext(pet.id)} 经验`, `Kitchen helper · ${petXpToNext(pet.id)} XP to grow`) : ui('厨房帮工 · 当前最终形态', 'Kitchen helper · final form');
+      const status = met ? ui('厨师帽已领取 · 重复遇见扩充队伍', 'Chef hat on · repeat meetings grow the team') : ui('待加入厨房', 'Waiting to join');
       ctx.fillText(status, tx, r.y + r.h - 24, tw);
     });
   }
 
-  function drawEquippedBadge(r) {
-    const text = ui('出战', 'ON');
-    ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    const w = isEn() ? 38 : 46;
-    const b = { x: r.x + r.w - w - 12, y: r.y + 12, w, h: 25 };
-    roundRect(b.x, b.y, b.w, b.h, 10, true, true, 2);
-    ctx.fillStyle = '#111';
-    ctx.font = '900 12px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2);
-    ctx.restore();
-  }
-
-  function petGrowthText(pet) {
-    const level = petLevel(pet.id);
-    const note = petFormNoteAtLevel(pet, level);
-    const next = level >= 3 ? ui('已到最终形态', 'Final form reached') : ui(`下一形态：${petFormNameAtLevel(pet, level + 1)}`, `Next: ${petFormNameAtLevel(pet, level + 1)}`);
-    return `${note} · ${next}`;
-  }
-
-  function drawPetGrowthBar(x, y, w, pet) {
-    const ps = petSave(pet.id);
-    const level = petLevel(pet.id);
-    const min = PET_XP_LEVELS[level - 1] || 0;
-    const max = level >= 3 ? PET_XP_LEVELS[2] : PET_XP_LEVELS[level];
-    const ratio = level >= 3 ? 1 : clamp((ps.xp - min) / Math.max(1, max - min), 0, 1);
-    ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    roundRect(x, y, w, 10, 5, true, true, 2);
-    ctx.fillStyle = '#111';
-    roundRect(x + 2, y + 2, Math.max(0, (w - 4) * ratio), 6, 4, true, false, 0);
-    ctx.restore();
-  }
-
   function drawPetPortrait(pet, box) {
     const def = PEOPLE.find(p => p.name === pet.animalName);
-    const level = petLevel(pet.id);
     if (def) drawCardImage(def, box);
-    drawPetFormEffects(pet, level, box.x + box.w / 2, box.y + box.h * 0.58, Math.min(box.w, box.h) * 0.74);
+    drawChefHat(box.x + box.w / 2, box.y + box.h * 0.20, Math.min(box.w, box.h) * 0.38);
   }
 
   function drawCardImage(item, box) {
@@ -4389,71 +3871,6 @@
   }
 
 
-  function drawEvolution() {
-    const l = state.layout;
-    drawMenuBackground();
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 5;
-    roundRect(l.w * 0.07, l.h * 0.12, l.w * 0.86, l.h * 0.20, 24, true, true, 5);
-
-    ctx.fillStyle = '#111';
-    ctx.font = isEn() ? '900 30px system-ui, sans-serif' : '900 32px system-ui, sans-serif';
-    ctx.fillText(ui('妖怪进化', 'Monster Evolution'), l.w / 2, l.h * 0.18);
-
-    ctx.font = '800 13px system-ui, sans-serif';
-    ctx.fillText(ui('选择一个封印，另一个会生效', 'Choose one to seal. The other takes effect.'), l.w / 2, l.h * 0.235);
-
-    ctx.font = '700 11px system-ui, sans-serif';
-    ctx.fillText(ui(`当前妖变：${activeEvolutionText()}`, `Active mutations: ${activeEvolutionText()}`), l.w / 2, l.h * 0.285);
-    ctx.restore();
-
-    const opts = state.evolutionOptions || [];
-    const rects = evolutionOptionRects();
-    drawEvolutionCard(rects[0], opts[0], 'evo0');
-    drawEvolutionCard(rects[1], opts[1], 'evo1');
-
-    ctx.save();
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText(ui('你封住的是“现在不会发生”，不是永远消失。', 'Sealed means delayed, not removed forever.'), l.w / 2, l.h - 54);
-    ctx.restore();
-  }
-
-  function drawEvolutionCard(r, option, id) {
-    if (!option) return;
-    drawPressTransform(r, id, () => {
-      ctx.fillStyle = '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 5;
-      roundRect(r.x, r.y, r.w, r.h, 22, true, true, 5);
-
-      ctx.fillStyle = '#111';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-
-      ctx.font = isEn() ? '900 16px system-ui, sans-serif' : '900 18px system-ui, sans-serif';
-      ctx.fillText(ui('封印这个进化', 'Seal this mutation'), r.x + 20, r.y + 16);
-
-      ctx.font = isEn() ? '900 22px system-ui, sans-serif' : '900 23px system-ui, sans-serif';
-      const titleBottom = wrapText(evolutionTitle(option), r.x + 20, r.y + 45, r.w - 40, isEn() ? 25 : 27, 'left');
-
-      ctx.font = isEn() ? '700 12.5px system-ui, sans-serif' : '700 13px system-ui, sans-serif';
-      wrapText(evolutionDesc(option), r.x + 20, titleBottom + 8, r.w - 40, isEn() ? 17 : 18, 'left');
-
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'bottom';
-      ctx.font = isEn() ? '900 13px system-ui, sans-serif' : '900 14px system-ui, sans-serif';
-      ctx.fillText(ui('点选封印', 'Tap to seal'), r.x + r.w - 20, r.y + r.h - 18);
-    });
-  }
-
   function drawResult() {
     const l = state.layout;
     drawMenuBackground();
@@ -4480,13 +3897,13 @@
     });
     ctx.textAlign = 'center';
     ctx.font = '700 11px system-ui, sans-serif';
-    wrapText(ui(`本局随机商店已出现 ${currentShopSkills().length} 个技能`, `${currentShopSkills().length} skills appeared in the run shop`), l.w / 2, panel.y + panel.h - 26, panel.w - 48, 15, 'center');
+    wrapText(ui('下一步：重新准备巡夜，或去厨房处理料理与技能', 'Next: prepare another patrol, or visit the kitchen'), l.w / 2, panel.y + panel.h - 26, panel.w - 48, 15, 'center');
     ctx.restore();
 
     const bw = Math.min(260, l.w * 0.68);
     const x = (l.w - bw) / 2;
     const baseY = resultButtonsY();
-    drawUIButton({ x, y: baseY, w: bw, h: 52 }, ui('逛本局技能店', 'Run Skill Shop'), '', 'again');
+    drawUIButton({ x, y: baseY, w: bw, h: 52 }, ui('重新准备巡夜', 'Prepare Next Run'), '', 'again');
     drawUIButton({ x, y: baseY + 62, w: bw, h: 52 }, ui('去厨房做料理', 'Go Cook'), '', 'petsResult');
     drawUIButton({ x, y: baseY + 124, w: bw, h: 52 }, ui('返回门口', 'Return to Entrance'), '', 'homeResult');
   }
@@ -4515,19 +3932,10 @@
     if (lost) {
       lines.push(ui(`失败丢失：${formatIngredientMap(lost)}`, `Lost: ${formatIngredientMap(lost)}`));
     }
-    Object.keys(r.petXp).forEach(id => {
+    Object.keys(r.petJoins || {}).forEach(id => {
       const pet = petById(id);
-      if (pet) lines.push(ui(`${pet.name}经验 +${r.petXp[id]}`, `${pet.nameEn} XP +${r.petXp[id]}`));
+      if (pet) lines.push(ui(`厨房队加入：${pet.name} +${r.petJoins[id]}`, `Kitchen team: ${pet.nameEn} +${r.petJoins[id]}`));
     });
-    r.petEvolutions.forEach(e => {
-      const pet = petById(e.id);
-      if (pet) lines.push(ui(`厨房队成长：${pet.name} → ${petFormNameAtLevel(pet, e.to)}`, `Kitchen team grew: ${pet.nameEn} -> ${petFormNameAtLevel(pet, e.to)}`));
-    });
-    const triggers = [];
-    if (r.petTriggers.rabbit) triggers.push(ui(`兔子救门 ${r.petTriggers.rabbit}次`, `Rabbit saves ${r.petTriggers.rabbit}`));
-    if (r.petTriggers.dog) triggers.push(ui(`小狗预警 ${r.petTriggers.dog}次`, `Dog warnings ${r.petTriggers.dog}`));
-    if (r.petTriggers.owl) triggers.push(ui(`猫头鹰感知 ${r.petTriggers.owl}次`, `Owl senses ${r.petTriggers.owl}`));
-    if (triggers.length) lines.push(triggers.join('  '));
     if (lines.length === 1 && r.passedDoors === 0 && r.spirit === 0 && r.talismanDust === 0) {
       lines.push(ui('这局没有带回资源，再试一门就会有收获。', 'No rewards this run. Clear one door to bring something back.'));
     }
@@ -4678,11 +4086,6 @@
   }
   function kitchenMenuSub() {
     return ui(`铜钱 ${state.save.coins || 0} · 食谱 ${recipeCount()}/${RECIPES.length}`, `Coins ${state.save.coins || 0} · Recipes ${recipeCount()}/${RECIPES.length}`);
-  }
-  function activePetTopText() {
-    const p = activePet();
-    if (!p) return ui('无', 'None');
-    return `${petFormName(p)} Lv${petLevel(p.id)}`;
   }
   function hasAnyPetMet() { return PETS.some(p => petSave(p.id).met); }
   function collectCountText() { return `${seenGhostCount() + seenPeopleCount()}/${GHOSTS.length + PEOPLE.length}`; }
