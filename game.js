@@ -1,7 +1,8 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.18.0_kitchen_skill_build';
+  const VERSION = 'v0.18.1_test_pantry_no_pet_runs';
+  const TEST_PANTRY_STOCK = 99;
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -61,12 +62,12 @@
       animalName: '兔子',
       name: '兔子',
       nameEn: 'Rabbit',
-      forms: ['普通兔子', '符火兔', '月白灵兔'],
-      formsEn: ['Rabbit', 'Talisman Rabbit', 'Moonlit Rabbit'],
-      formNotes: ['刚结缘的小伙伴', '耳尖浮起符火', '月白光环护门'],
-      formNotesEn: ['New little ally', 'Talisman fire on its ears', 'Moonlight ring guards doors'],
-      skill: '危急时自动帮你关门一次',
-      skillEn: 'Closes the door once when danger is critical',
+      forms: ['兔子学徒', '炒锅兔', '炒锅兔小组'],
+      formsEn: ['Rabbit Trainee', 'Wok Rabbit', 'Wok Rabbit Team'],
+      formNotes: ['刚加入厨房', '开始负责炒锅', '组成炒锅帮工小组'],
+      formNotesEn: ['New to the kitchen', 'Works at the wok', 'Forms a wok helper team'],
+      skill: '只在厨房负责炒锅',
+      skillEn: 'Kitchen-only wok helper',
       tint: '#f7f7ff'
     },
     {
@@ -74,12 +75,12 @@
       animalName: '小狗',
       name: '小狗',
       nameEn: 'Dog',
-      forms: ['普通小狗', '镇魂铃犬', '守门灵犬'],
-      formsEn: ['Dog', 'Bell Dog', 'Gatekeeper Dog'],
-      formNotes: ['会陪你巡门', '镇魂铃提前响动', '披上守门小披风'],
-      formNotesEn: ['Patrols with you', 'Soul bell rings early', 'Wears a gatekeeper cape'],
-      skill: '遇鬼时更早响铃预警',
-      skillEn: 'Rings early when a ghost is behind the door',
+      forms: ['小狗学徒', '蒸笼犬', '蒸笼犬小组'],
+      formsEn: ['Dog Trainee', 'Steamer Dog', 'Steamer Dog Team'],
+      formNotes: ['刚加入厨房', '开始照看蒸笼', '组成蒸笼帮工小组'],
+      formNotesEn: ['New to the kitchen', 'Watches the steamer', 'Forms a steamer helper team'],
+      skill: '只在厨房负责蒸笼',
+      skillEn: 'Kitchen-only steamer helper',
       tint: '#fff3d6'
     },
     {
@@ -87,12 +88,12 @@
       animalName: '猫头鹰',
       name: '猫头鹰',
       nameEn: 'Owl',
-      forms: ['普通猫头鹰', '灵眼鸮', '观门灵鸮'],
-      formsEn: ['Owl', 'Spirit-eyed Owl', 'Door-seeing Owl'],
-      formNotes: ['安静观察门缝', '眼中浮起灵光', '翼间出现观门眼纹'],
-      formNotesEn: ['Watches door cracks', 'Spirit light in its eyes', 'Eye marks spread on its wings'],
-      skill: '隔几门提前感知异常',
-      skillEn: 'Senses abnormal doors every few rooms',
+      forms: ['猫头鹰学徒', '配方鸮', '配方鸮小组'],
+      formsEn: ['Owl Trainee', 'Recipe Owl', 'Recipe Owl Team'],
+      formNotes: ['刚加入厨房', '开始整理配方', '组成配方记录小组'],
+      formNotesEn: ['New to the kitchen', 'Organizes recipes', 'Forms a recipe-recording team'],
+      skill: '只在厨房整理食谱',
+      skillEn: 'Kitchen-only recipe helper',
       tint: '#e9f6ff'
     }
   ];
@@ -340,7 +341,8 @@
         xp: Math.max(0, Number(old.xp || 0))
       };
     });
-    const activePet = PETS.some(p => p.id === data.activePet) ? data.activePet : '';
+    // 小动物只保留为厨房团队数据，不再允许带入局内。
+    const activePet = '';
     const storedDaily = data.dailySkills || {};
     const dailySkills = storedDaily.date === localDayKey()
       ? {
@@ -353,6 +355,8 @@
     const platedDish = data.platedDish && (data.platedDish.id === 'dark' || RECIPES.some(r => r.id === data.platedDish.recipeId))
       ? data.platedDish
       : null;
+    const pantry = normalizeCountMap(data.pantry, INGREDIENTS.map(i => i.id));
+    INGREDIENTS.forEach(ingredient => { pantry[ingredient.id] = Math.max(pantry[ingredient.id], TEST_PANTRY_STOCK); });
     return {
       bestRoom: Number(data.bestRoom || 1),
       ghosts: data.ghosts || {},
@@ -362,7 +366,7 @@
       petHouseSeen: !!data.petHouseSeen,
       spirit: Math.max(0, Number(data.spirit || 0)),
       talismanDust: Math.max(0, Number(data.talismanDust || 0)),
-      pantry: normalizeCountMap(data.pantry, INGREDIENTS.map(i => i.id)),
+      pantry,
       recipes: data.recipes || {},
       coins: Math.max(0, Number(data.coins || 0)),
       dailySkills,
@@ -467,7 +471,7 @@
     if (p.xp >= PET_XP_LEVELS[1]) return 2;
     return 1;
   }
-  function activePet() { return petById(state.save.activePet); }
+  function activePet() { return null; }
   function activePetLevel() {
     const p = activePet();
     return p ? petLevel(p.id) : 0;
@@ -521,7 +525,6 @@
       state.runRewards.petEvolutions.push({ id: pet.id, from: beforeLevel || 1, to: afterLevel });
       triggerPetFx(pet.id, 'evolve', afterLevel);
     }
-    state.save.activePet = state.save.activePet || pet.id;
     saveGame();
     setToast(first
       ? ui(`与${pet.name}结缘了`, `${pet.nameEn} joined you`)
@@ -1104,7 +1107,6 @@
     state.transition = 0;
     state.corridorOffset = 0;
     state.content = takeContentForRoom(state.room);
-    maybeOwlSense(state.content);
   }
 
   function startRun(difficulty, testMode = false) {
@@ -1904,7 +1906,6 @@
     if (state.mode === 'bossFight') return updateBossFight(dt);
 
     if (c.type === 'ghost') {
-      maybeDogWarn(c);
       if (state.door > 0.055) {
         const newbieEase = state.room <= 3 ? 0.64 : state.room <= 6 ? 0.84 : 1;
         const base = (0.62 + Math.min(state.room, 90) * 0.0066) * newbieEase;
@@ -1917,7 +1918,6 @@
       } else {
         state.danger = 0;
       }
-      if (maybeRabbitSave()) return;
       if (state.danger >= 1) gameOver('门开太久，鬼冲出来了');
     } else if (c.type === 'person' || c.type === 'empty') {
       if (state.door >= 0.92) {
@@ -2265,11 +2265,7 @@
         const ps = petSave(r.pet.id);
         if (ps.met) {
           setPressed(`pet-${r.pet.id}`);
-          state.save.activePet = state.save.activePet === r.pet.id ? '' : r.pet.id;
-          saveGame();
-          setToast(state.save.activePet
-            ? ui(`${r.pet.name}出战`, `${r.pet.nameEn} selected`)
-            : ui('已取消出战', 'Pet unequipped'), 1.2);
+          setToast(ui(`${r.pet.name}留在厨房帮忙，不进入巡夜`, `${r.pet.nameEn} stays in the kitchen`), 1.4);
         } else {
           setToast(ui('先在门后遇见它', 'Meet it behind a door first'), 1.2);
         }
@@ -2700,7 +2696,6 @@
     drawTopUI();
     drawGhostEyeFx();
     drawBottomControls();
-    drawActivePetCompanion();
     drawPetFx();
     drawToast();
   }
@@ -3569,7 +3564,7 @@
       '8. Drag or tap ingredients into kitchen slots, then choose Stir-fry or Steam. Failed experiments consume ingredients.',
       '9. Cooking places a dish on the serving counter. Selling is a separate action.',
       '10. Every finished run refreshes a random skill shop. Skills are level 1, fixed-price, and last until local midnight.',
-      '11. Existing spirit-pet data is preserved under Chef Teams during this greybox transition.',
+      '11. Animals are kitchen helpers only and never join patrol runs.',
       '12. Sealing the Nine-tailed Fox opens Ghost Eye for 10 seconds.',
       '13. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
       '14. Zhuyin is a rare boss-like spirit. Sealing it briefly reveals future doors.'
@@ -3584,7 +3579,7 @@
       '8. 在厨房把食材拖入或点入料理格，再选择炒锅或蒸笼；实验失败也会消耗食材。',
       '9. 做好的料理先进入出餐台，玩家再单独点击出售。',
       '10. 每局结束刷新随机技能商店；技能只有一级、价格固定，当天持续生效并在本地00:00清空。',
-      '11. 灰盒转型期间，原灵宠数据暂时保留在厨房的小厨师队页面。',
+      '11. 小动物只作为厨房帮工保留，不再进入巡夜提供局内效果。',
       '12. 封印九尾狐后开启10秒鬼眼，门会变透明。',
       '13. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
       '14. 烛阴是极少现身的Boss级妖怪，封印后会短暂照见未来几扇门。'
@@ -3808,7 +3803,7 @@
     ctx.fillStyle = '#111';
     ctx.textAlign = 'center';
     ctx.font = '700 11px system-ui, sans-serif';
-    ctx.fillText(ui('现有灵宠数据暂时保留，后续逐步转成厨师团队', 'Pet data is preserved while teams are prototyped'), l.w / 2, 140);
+    ctx.fillText(ui('小动物只在厨房帮忙，不再进入巡夜', 'Animals stay in the kitchen and do not join runs'), l.w / 2, 140);
     ctx.restore();
 
     ctx.save();
@@ -4070,7 +4065,7 @@
     ctx.fillStyle = '#111';
     ctx.textAlign = 'left';
     ctx.font = '900 13px system-ui, sans-serif';
-    ctx.fillText(ui('食材架：拖进格子，或轻点自动放入', 'Pantry: drag or tap into a slot'), 16, 146);
+    ctx.fillText(ui(`测试食材架：每种直接补到 ${TEST_PANTRY_STOCK}`, `Test pantry: every ingredient starts at ${TEST_PANTRY_STOCK}`), 16, 146);
     ctx.restore();
 
     kitchenIngredientRects().forEach(r => drawKitchenIngredient(r));
@@ -4260,7 +4255,7 @@
     const ps = petSave(pet.id);
     const met = !!ps.met;
     const level = petLevel(pet.id);
-    const active = state.save.activePet === pet.id;
+    const active = false;
 
     drawPressTransform(r, `pet-${pet.id}`, () => {
       ctx.fillStyle = active ? '#111' : '#fffdf6';
@@ -4286,12 +4281,11 @@
       ctx.font = '800 12px system-ui, sans-serif';
       ctx.fillText(met ? ui(`等级 ${level}  经验 ${ps.xp}`, `Lv ${level}  XP ${ps.xp}`) : ui(`在门后遇见${pet.name}`, `Find ${pet.nameEn} behind a door`), tx, r.y + 45, tw);
       ctx.font = '700 12px system-ui, sans-serif';
-      wrapText(met ? petGrowthText(pet) : ui('结缘后可出战，经验足够会改变形态。', 'After meeting, it can evolve and join runs.'), tx, r.y + 68, tw, 15, 'left');
+      wrapText(met ? petGrowthText(pet) : ui('结缘后加入厨房团队，不进入巡夜。', 'After meeting, it joins the kitchen team only.'), tx, r.y + 68, tw, 15, 'left');
       if (met) drawPetGrowthBar(tx, r.y + r.h - 42, tw, pet);
       ctx.font = '900 12px system-ui, sans-serif';
-      const status = !met ? ui('未结缘', 'Locked') : active ? ui('出战中 · 点击取消', 'Equipped · tap to remove') : petXpToNext(pet.id) > 0 ? ui(`点击出战 · 距进化 ${petXpToNext(pet.id)} 经验`, `Tap to equip · ${petXpToNext(pet.id)} XP to evolve`) : ui('点击出战 · 最终形态', 'Tap to equip · final form');
+      const status = !met ? ui('未结缘', 'Locked') : petXpToNext(pet.id) > 0 ? ui(`厨房帮工 · 距成长 ${petXpToNext(pet.id)} 经验`, `Kitchen helper · ${petXpToNext(pet.id)} XP to grow`) : ui('厨房帮工 · 当前最终形态', 'Kitchen helper · final form');
       ctx.fillText(status, tx, r.y + r.h - 24, tw);
-      if (active) drawEquippedBadge(r);
     });
   }
 
@@ -4527,7 +4521,7 @@
     });
     r.petEvolutions.forEach(e => {
       const pet = petById(e.id);
-      if (pet) lines.push(ui(`进化成功：${pet.name} → ${petFormNameAtLevel(pet, e.to)}`, `Evolved: ${pet.nameEn} -> ${petFormNameAtLevel(pet, e.to)}`));
+      if (pet) lines.push(ui(`厨房队成长：${pet.name} → ${petFormNameAtLevel(pet, e.to)}`, `Kitchen team grew: ${pet.nameEn} -> ${petFormNameAtLevel(pet, e.to)}`));
     });
     const triggers = [];
     if (r.petTriggers.rabbit) triggers.push(ui(`兔子救门 ${r.petTriggers.rabbit}次`, `Rabbit saves ${r.petTriggers.rabbit}`));
@@ -4680,9 +4674,7 @@
 
   function petMenuSub() {
     const met = PETS.filter(p => petSave(p.id).met).length;
-    const p = activePet();
-    if (!p) return ui(`${met}/${PETS.length} 已结缘`, `${met}/${PETS.length} met`);
-    return ui(`${petFormName(p)}出战`, `${petFormName(p)} ready`);
+    return ui(`${met}/${PETS.length} 厨房帮工`, `${met}/${PETS.length} kitchen helpers`);
   }
   function kitchenMenuSub() {
     return ui(`铜钱 ${state.save.coins || 0} · 食谱 ${recipeCount()}/${RECIPES.length}`, `Coins ${state.save.coins || 0} · Recipes ${recipeCount()}/${RECIPES.length}`);

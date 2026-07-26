@@ -7,11 +7,12 @@ const gamePath = path.join(__dirname, '..', 'game.js');
 let source = fs.readFileSync(gamePath, 'utf8');
 source = source.replace(/\}\)\(\);\s*$/, `
   globalThis.__foodTest = {
-    VERSION, INGREDIENTS, RECIPES, DAILY_SKILLS, GHOSTS, state,
+    VERSION, INGREDIENTS, RECIPES, DAILY_SKILLS, GHOSTS, TEST_PANTRY_STOCK, state,
     emptyRunRewards, cookSelectedRecipe, buyDailySkill, startRun,
     rewardIngredientDrop, safeReturnHome, gameOver, recipeCount,
     sellPlatedDish, discardPlatedDish, useDailyActiveSkill,
-    skillCooldownRemaining, generateDailyShopOffers, upgradeKitchenSlots
+    skillCooldownRemaining, generateDailyShopOffers, upgradeKitchenSlots,
+    normalizeSave, activePet
   };
 })();`);
 
@@ -102,9 +103,13 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.18.0_kitchen_skill_build');
+assert.equal(api.VERSION, 'v0.18.1_test_pantry_no_pet_runs');
 assert.equal(api.INGREDIENTS.length, 4);
 assert.equal(api.RECIPES.length, 4);
+assert.equal(api.TEST_PANTRY_STOCK, 99);
+assert.equal(Math.min(...Object.values(api.state.save.pantry)), 99, 'test pantry starts full');
+assert.equal(api.normalizeSave({ activePet: 'rabbit' }).activePet, '', 'old equipped pet is cleared during save migration');
+assert.equal(api.activePet(), null, 'no animal can be active during a run');
 
 api.state.save.pantry.tomato = 1;
 api.state.save.pantry.egg = 1;
@@ -149,9 +154,10 @@ api.rewardIngredientDrop({ ghosts: [api.GHOSTS[0]] });
 assert.equal(api.state.freshSeals, 0, 'armed Fresh Seal consumes one charge');
 assert.equal(Object.values(api.state.runRewards.ingredients).reduce((a, b) => a + b, 0), 1, 'armed Fresh Seal guarantees one ingredient');
 
+const pantryBeforeSafeReturn = Object.values(api.state.save.pantry).reduce((a, b) => a + b, 0);
 api.safeReturnHome();
 assert.equal(api.state.runSucceeded, true);
-assert.equal(Object.values(api.state.save.pantry).reduce((a, b) => a + b, 0), 1, 'safe return banks run ingredients');
+assert.equal(Object.values(api.state.save.pantry).reduce((a, b) => a + b, 0), pantryBeforeSafeReturn + 1, 'safe return banks run ingredients');
 
 api.startRun('normal');
 api.state.runRewards.ingredients.tomato = 2;
