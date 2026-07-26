@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.21.1_active_eye_slow_cooking';
+  const VERSION = 'v0.22.0_immersive_kitchen';
   const TEST_PANTRY_STOCK = 99;
   const LOADOUT_LIMITS = { active: 1, support: 2 };
   const BUSINESS_TITLES = [
@@ -3276,29 +3276,40 @@
     drawPressTransform(r, 'runSkill-foresightSkill', () => {
       const cx = r.x + r.w / 2;
       const cy = r.y + r.h / 2;
-      ctx.fillStyle = exhausted || remaining > 0 ? '#d7d7d7' : '#fffdf6';
+      const ready = !exhausted && remaining <= 0;
+      const pulse = ready ? 0.5 + Math.sin(state.t * 4.4) * 0.18 : 0;
+      if (ready) {
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = '#ffe269';
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r.w * 0.53, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.fillStyle = exhausted ? '#b9b7b5' : remaining > 0 ? '#d2d0d7' : '#29244d';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.strokeStyle = exhausted ? '#777' : '#58c7e8';
+      ctx.strokeStyle = exhausted ? '#777' : remaining > 0 ? '#8e8a9e' : '#6ee7ff';
       ctx.lineWidth = 5;
       ctx.beginPath();
       ctx.arc(cx, cy, r.w / 2 - 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
       ctx.stroke();
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 2.5;
-      for (let i = 0; i < 3; i++) {
-        const ox = (i - 1) * 7;
-        roundRect(cx + ox - 7, cy - 12 + Math.abs(i - 1) * 3, 14, 23, 4, false, true, 2.5);
+      drawFutureOrbGlyph(cx, cy - 2, 34, ready ? 1 : progress, exhausted);
+      for (let i = 0; i < 2; i++) {
+        ctx.fillStyle = i < usesLeft ? '#ffe269' : '#77737f';
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx - 6 + i * 12, cy + 19, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
       }
-      ctx.fillStyle = '#fff06d';
-      ctx.beginPath();
-      ctx.arc(cx + 12, cy - 13, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
     });
     ctx.save();
     ctx.fillStyle = '#111';
@@ -3307,6 +3318,62 @@
     ctx.font = '900 8.5px system-ui, sans-serif';
     const label = exhausted ? ui('已用完', 'EMPTY') : remaining > 0 ? ui(`${remaining}门 · 余${usesLeft}`, `${remaining} doors · ${usesLeft}`) : ui(`可用 ×${usesLeft}`, `READY ×${usesLeft}`);
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h + 8, 78);
+    ctx.restore();
+  }
+
+  function drawFutureOrbGlyph(cx, cy, size, colorProgress, exhausted) {
+    const color = clamp(colorProgress, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = exhausted ? 0.58 : 1;
+    const orb = ctx.createRadialGradient(cx - size * 0.12, cy - size * 0.18, 2, cx, cy, size * 0.46);
+    orb.addColorStop(0, color > 0.55 ? '#f7f4ff' : '#d8d6dc');
+    orb.addColorStop(0.38, color > 0.25 ? '#866ee7' : '#aaa7b2');
+    orb.addColorStop(1, color > 0.65 ? '#30245f' : '#777480');
+    ctx.fillStyle = orb;
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2.3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.36, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.strokeStyle = color > 0.55 ? '#d8fbff' : '#dad8df';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - size * 0.18, cy + size * 0.32);
+    ctx.quadraticCurveTo(cx + size * 0.12, cy + size * 0.08, cx - size * 0.02, cy - size * 0.04);
+    ctx.quadraticCurveTo(cx - size * 0.15, cy - size * 0.16, cx + size * 0.13, cy - size * 0.29);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.strokeStyle = color > 0.45 ? '#fffdf6' : '#d0ced4';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(cx - size * 0.22, cy + size * 0.12);
+    ctx.lineTo(cx - size * 0.22, cy - size * 0.16);
+    ctx.quadraticCurveTo(cx, cy - size * 0.38, cx + size * 0.22, cy - size * 0.16);
+    ctx.lineTo(cx + size * 0.22, cy + size * 0.12);
+    ctx.stroke();
+
+    ctx.fillStyle = color > 0.55 ? '#ffe269' : '#d1cfd5';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 1.2;
+      ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = Math.PI / 4 * i;
+      const rr = i % 2 ? size * 0.07 : size * 0.13;
+      const px = cx + Math.cos(a) * rr;
+      const py = cy - size * 0.18 + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
     ctx.restore();
   }
 
@@ -3610,7 +3677,7 @@
   function drawPetHouse() {
     const l = state.layout;
     state.petScroll = clamp(state.petScroll, 0, maxPetScroll());
-    drawMenuBackground();
+    drawKitchenRoomBackground();
     drawBackButton();
 
     if (state.kitchenView === 'chefs') {
@@ -3622,41 +3689,128 @@
       return;
     }
 
-    ctx.save();
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const compactTitle = l.w < 380;
-    ctx.font = compactTitle ? '900 22px system-ui, sans-serif' : '900 25px system-ui, sans-serif';
-    ctx.fillText(compactTitle ? ui('百味厨房', 'Kitchen') : ui('小厨师大灶台', 'Little Chef Stove'), l.w / 2 + 28, 38);
-    ctx.font = '800 11px system-ui, sans-serif';
-    const title = businessTitleInfo().current;
-    ctx.fillText(ui(`${title.name} · 铜钱 ${state.save.coins || 0} · 料理库存 ${totalDishCount()}`, `${title.nameEn} · Coins ${state.save.coins || 0} · Dishes ${totalDishCount()}`), l.w / 2, 64, l.w - 28);
-    ctx.restore();
-
+    drawKitchenHeader();
     drawKitchenShortcuts();
     drawKitchenCook();
-    drawUIButton(kitchenPrepareRect(), ui('去准备巡夜', 'Prepare Patrol'), ui('选择本局携带技能', 'Choose carried skills'), 'kitchenPrepare');
+    drawKitchenExitDoor();
+  }
+
+  function drawKitchenRoomBackground() {
+    const l = state.layout;
+    const v = kitchenVerticalLayout();
+    const floorY = Math.min(l.h - 112, v.dishY + v.dishH + 54);
+    ctx.save();
+    ctx.fillStyle = '#f4dfb7';
+    ctx.fillRect(0, 0, l.w, l.h);
+
+    ctx.fillStyle = '#4c2d20';
+    ctx.fillRect(0, 0, l.w, 76);
+    ctx.fillStyle = '#6f422b';
+    ctx.fillRect(0, 68, l.w, 10);
+    ctx.strokeStyle = 'rgba(35,20,14,0.34)';
+    ctx.lineWidth = 1.5;
+    for (let x = -24; x < l.w + 40; x += 58) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + 22, 76);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#fff0cf';
+    ctx.fillRect(0, 76, l.w, floorY - 76);
+    ctx.strokeStyle = 'rgba(109,79,54,0.17)';
+    ctx.lineWidth = 1;
+    for (let y = 76; y < floorY; y += 30) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(l.w, y);
+      ctx.stroke();
+    }
+    for (let x = 0; x < l.w; x += 42) {
+      ctx.beginPath();
+      ctx.moveTo(x, 76);
+      ctx.lineTo(x, floorY);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#b46b3b';
+    ctx.fillRect(0, floorY, l.w, l.h - floorY);
+    ctx.strokeStyle = 'rgba(62,34,22,0.26)';
+    ctx.lineWidth = 2;
+    for (let y = floorY + 22; y < l.h; y += 28) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(l.w, y);
+      ctx.stroke();
+    }
+    for (let x = -60; x < l.w + 70; x += 70) {
+      ctx.beginPath();
+      ctx.moveTo(l.w / 2 + (x - l.w / 2) * 0.24, floorY);
+      ctx.lineTo(x, l.h);
+      ctx.stroke();
+    }
+
+    if (state.kitchenView === 'cook') {
+      ctx.fillStyle = '#f1cc67';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2;
+      [92, l.w - 92].forEach((x, i) => {
+        ctx.beginPath();
+        ctx.moveTo(x, 76);
+        ctx.lineTo(x, 103 + i * 4);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(x, 112 + i * 4, 25, 12, 0, Math.PI, Math.PI * 2);
+        ctx.lineTo(x + 18, 123 + i * 4);
+        ctx.lineTo(x - 18, 123 + i * 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+    }
+    ctx.restore();
+  }
+
+  function drawKitchenHeader() {
+    const l = state.layout;
+    const sign = { x: 144, y: 10, w: l.w - 158, h: 54 };
+    ctx.save();
+    ctx.fillStyle = '#9a482d';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    roundRect(sign.x, sign.y, sign.w, sign.h, 9, true, true, 3);
+    ctx.strokeStyle = '#edc878';
+    ctx.lineWidth = 1.5;
+    roundRect(sign.x + 5, sign.y + 5, sign.w - 10, sign.h - 10, 6, false, true, 1.5);
+    ctx.fillStyle = '#fff7df';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${l.w < 380 ? 17 : 19}px system-ui, sans-serif`;
+    ctx.fillText(ui('百味小厨房', 'Little Flavor Kitchen'), sign.x + sign.w / 2, sign.y + 18, sign.w - 16);
+    const title = businessTitleInfo().current;
+    ctx.fillStyle = '#ffe49a';
+    ctx.font = '800 9px system-ui, sans-serif';
+    ctx.fillText(ui(`${title.name} · 铜钱${state.save.coins || 0} · 存餐${totalDishCount()}`, `${title.nameEn} · ${state.save.coins || 0}c · ${totalDishCount()} dishes`), sign.x + sign.w / 2, sign.y + 39, sign.w - 12);
+    ctx.restore();
   }
 
   function drawKitchenChefRoster() {
     const l = state.layout;
+    drawKitchenSectionSign(ui('小厨师名册', 'Chef Roster'));
     ctx.save();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#4b3022';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 25px system-ui, sans-serif';
-    ctx.fillText(ui('小厨师名册', 'Chef Roster'), l.w / 2 + 28, 40);
     ctx.font = '700 11px system-ui, sans-serif';
-    ctx.fillText(ui('重复遇见会扩充队伍；小厨师只在厨房帮忙', 'Repeat meetings grow teams; chefs stay in the kitchen'), l.w / 2, 72, l.w - 32);
+    ctx.fillText(ui('重复遇见会扩充队伍 · 只在厨房帮忙', 'Repeat meetings grow teams · kitchen only'), l.w / 2, 94, l.w - 32);
     ctx.restore();
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, 128, l.w, l.h - 144);
+    ctx.rect(0, 118, l.w, l.h - 134);
     ctx.clip();
     petCardRects().forEach(r => {
-      if (r.y > l.h || r.y + r.h < 128) return;
+      if (r.y > l.h || r.y + r.h < 118) return;
       drawPetCard(r, r.pet);
     });
     ctx.restore();
@@ -3679,25 +3833,42 @@
   function drawKitchenMarket() {
     const l = state.layout;
     const title = businessTitleInfo();
-    const compactTitle = l.w < 380;
+    drawKitchenSectionSign(ui('今日料理行情', 'Daily Dish Market'));
     ctx.save();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#4b3022';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `900 ${compactTitle ? 20 : 24}px system-ui, sans-serif`;
-    ctx.fillText(ui('今日料理行情', 'Daily Dish Market'), l.w / 2 + (compactTitle ? 34 : 24), 38, l.w - 150);
     ctx.font = '900 12px system-ui, sans-serif';
-    ctx.fillText(ui(`称号：${title.current.name} · 累计收入 ${title.revenue}`, `Title: ${title.current.nameEn} · Revenue ${title.revenue}`), l.w / 2, 74, l.w - 34);
+    ctx.fillText(ui(`称号：${title.current.name} · 累计收入 ${title.revenue}`, `Title: ${title.current.nameEn} · Revenue ${title.revenue}`), l.w / 2, 88, l.w - 34);
     ctx.font = '700 10.5px system-ui, sans-serif';
     const progress = title.next
       ? ui(`再赚 ${title.next.revenue - title.revenue} 铜钱升级为「${title.next.name}」`, `Earn ${title.next.revenue - title.revenue} more for ${title.next.nameEn}`)
       : ui('已达到最高称号「星级大酒店」', 'Highest title reached: Star Hotel');
-    ctx.fillText(progress, l.w / 2, 98, l.w - 34);
+    ctx.fillText(progress, l.w / 2, 108, l.w - 34);
     ctx.font = '700 10px system-ui, sans-serif';
     ctx.fillStyle = '#5d5548';
-    ctx.fillText(ui('价格每日 00:00 更新 · 点击有库存的料理出售 1 份', 'Prices refresh at 00:00 · tap stocked dish to sell one'), l.w / 2, 121, l.w - 28);
+    ctx.fillText(ui('价格每日 00:00 更新 · 点击有库存的料理出售 1 份', 'Prices refresh at 00:00 · tap stocked dish to sell one'), l.w / 2, 128, l.w - 28);
     ctx.restore();
     kitchenMarketCardRects().forEach(r => drawKitchenMarketCard(r));
+  }
+
+  function drawKitchenSectionSign(label) {
+    const l = state.layout;
+    const r = { x: 144, y: 10, w: l.w - 158, h: 54 };
+    ctx.save();
+    ctx.fillStyle = '#9a482d';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    roundRect(r.x, r.y, r.w, r.h, 9, true, true, 3);
+    ctx.strokeStyle = '#edc878';
+    ctx.lineWidth = 1.5;
+    roundRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10, 6, false, true, 1.5);
+    ctx.fillStyle = '#fff7df';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${l.w < 380 ? 16 : 18}px system-ui, sans-serif`;
+    ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2, r.w - 14);
+    ctx.restore();
   }
 
   function drawKitchenMarketCard(r) {
@@ -3748,9 +3919,72 @@
   function drawKitchenShortcuts() {
     const r = kitchenShortcutRects();
     const upgrade = nextKitchenUpgrade();
-    drawMiniButton(r.chefs, ui(`厨师 ×${totalChefCount()}`, `Chefs ×${totalChefCount()}`), 'kitchenChefs');
-    drawMiniButton(r.upgrade, upgrade ? ui(`灶台 ${state.save.kitchen.slots}/4`, `Stove ${state.save.kitchen.slots}/4`) : ui('灶台 4/4', 'Stove 4/4'), 'kitchenUpgrade');
-    drawMiniButton(r.shop, ui('技能铺', 'Skill Shop'), 'kitchenShop');
+    drawKitchenWallObject(r.chefs, 'chefs', ui(`厨师 ×${totalChefCount()}`, `Chefs ×${totalChefCount()}`), 'kitchenChefs');
+    drawKitchenWallObject(r.upgrade, 'upgrade', upgrade ? ui(`灶台 ${state.save.kitchen.slots}/4`, `Stove ${state.save.kitchen.slots}/4`) : ui('灶台 4/4', 'Stove 4/4'), 'kitchenUpgrade');
+    drawKitchenWallObject(r.shop, 'shop', ui('技能香料柜', 'Skill Cabinet'), 'kitchenShop');
+  }
+
+  function drawKitchenWallObject(r, type, label, pressId) {
+    drawPressTransform(r, pressId, () => {
+      ctx.save();
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2.5;
+      if (type === 'chefs') {
+        ctx.fillStyle = '#7a4a2f';
+        roundRect(r.x, r.y, r.w, r.h, 5, true, true, 2.5);
+        ctx.fillStyle = '#fff0cf';
+        roundRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10, 3, true, true, 1.5);
+        drawChefHat(r.x + 20, r.y + 20, 18);
+      } else if (type === 'upgrade') {
+        ctx.fillStyle = '#b8c1ba';
+        roundRect(r.x, r.y + 4, r.w, r.h - 8, 5, true, true, 2.5);
+        ctx.fillStyle = '#5b7167';
+        ctx.fillRect(r.x + 8, r.y + 12, 22, 17);
+        ctx.beginPath();
+        ctx.arc(r.x + 19, r.y + 12, 8, Math.PI, 0);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#a84631';
+        roundRect(r.x, r.y, r.w, r.h, 5, true, true, 2.5);
+        ctx.fillStyle = '#e5b95e';
+        ctx.fillRect(r.x + 8, r.y + 7, 20, 28);
+        ctx.strokeRect(r.x + 8, r.y + 7, 20, 28);
+        ctx.fillStyle = '#b72820';
+        ctx.fillRect(r.x + 15, r.y + 12, 6, 16);
+      }
+      ctx.fillStyle = type === 'shop' ? '#fff7df' : '#111';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 9px system-ui, sans-serif';
+      ctx.fillText(label, r.x + r.w * 0.64, r.y + r.h / 2, r.w * 0.64 - 6);
+      ctx.restore();
+    });
+  }
+
+  function drawKitchenExitDoor() {
+    const r = kitchenPrepareRect();
+    drawPressTransform(r, 'kitchenPrepare', () => {
+      ctx.save();
+      ctx.fillStyle = '#315b55';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3.5;
+      roundRect(r.x, r.y, r.w, r.h, 8, true, true, 3.5);
+      ctx.fillStyle = '#e7c873';
+      ctx.fillRect(r.x + 8, r.y + 7, 28, r.h - 14);
+      ctx.strokeRect(r.x + 8, r.y + 7, 28, r.h - 14);
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.arc(r.x + 29, r.y + r.h / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff7df';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 13px system-ui, sans-serif';
+      ctx.fillText(ui('推门 · 准备巡夜', 'Door · Prepare Patrol'), r.x + r.w * 0.60, r.y + r.h / 2 - 5, r.w - 52);
+      ctx.font = '700 8.5px system-ui, sans-serif';
+      ctx.fillText(ui('选择本局携带技能', 'Choose carried skills'), r.x + r.w * 0.60, r.y + r.h / 2 + 11, r.w - 52);
+      ctx.restore();
+    });
   }
 
   function kitchenVerticalLayout() {
@@ -4063,15 +4297,16 @@
 
   function drawKitchenCook() {
     const v = kitchenVerticalLayout();
+    drawKitchenPantryShelf(v);
     ctx.save();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#5a321f';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 12px system-ui, sans-serif';
-    ctx.fillText(ui('① 从食材架拖进锅里', '① Drag ingredients into the stove'), 16, v.pantryY - 10);
+    ctx.font = '900 10px system-ui, sans-serif';
+    ctx.fillText(ui('食材木架 · 拖到备菜碗', 'Pantry shelf · drag to prep bowls'), 17, v.pantryY - 10);
     ctx.textAlign = 'right';
-    ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillText(ui(`测试库存：每种至少 ${TEST_PANTRY_STOCK}`, `Test stock: at least ${TEST_PANTRY_STOCK} each`), state.layout.w - 16, v.pantryY - 10);
+    ctx.font = '800 8.5px system-ui, sans-serif';
+    ctx.fillText(ui(`试营业库存 ≥${TEST_PANTRY_STOCK}`, `Test stock ≥${TEST_PANTRY_STOCK}`), state.layout.w - 17, v.pantryY - 10);
     ctx.restore();
 
     kitchenIngredientRects().forEach(r => drawKitchenIngredient(r));
@@ -4080,29 +4315,62 @@
     if (state.kitchenDrag) drawKitchenDraggedIngredient();
   }
 
+  function drawKitchenPantryShelf(v) {
+    const l = state.layout;
+    ctx.save();
+    ctx.fillStyle = '#8b4c2d';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    roundRect(8, v.pantryY + 49, l.w - 16, 19, 5, true, true, 3);
+    ctx.fillStyle = '#5f321e';
+    ctx.fillRect(13, v.pantryY + 66, l.w - 26, 6);
+    ctx.strokeRect(13, v.pantryY + 66, l.w - 26, 6);
+    [23, l.w - 29].forEach(x => {
+      ctx.beginPath();
+      ctx.moveTo(x, v.pantryY + 68);
+      ctx.lineTo(x + (x < l.w / 2 ? 10 : -10), v.pantryY + 83);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   function drawKitchenIngredient(r) {
     const count = state.save.pantry[r.ingredient.id] || 0;
     drawPressTransform(r, `ingredient-${r.ingredient.id}`, () => {
-      ctx.fillStyle = count > 0 ? '#fffdf6' : '#e8e4da';
+      ctx.save();
+      ctx.fillStyle = count > 0 ? '#f3d58c' : '#aaa39a';
       ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
-      roundRect(r.x, r.y, r.w, r.h, 14, true, true, 3);
-      drawIngredientIcon(r.ingredient, r.x + r.w / 2, r.y + 25, 28);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(r.x + 5, r.y + 28);
+      ctx.lineTo(r.x + r.w - 5, r.y + 28);
+      ctx.lineTo(r.x + r.w - 9, r.y + r.h - 3);
+      ctx.lineTo(r.x + 9, r.y + r.h - 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = count > 0 ? '#fff4cf' : '#d0cbc4';
+      ctx.beginPath();
+      ctx.ellipse(r.x + r.w / 2, r.y + 29, r.w * 0.38, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawIngredientIcon(r.ingredient, r.x + r.w / 2, r.y + 24, 29);
       ctx.fillStyle = '#111';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '900 10px system-ui, sans-serif';
-      ctx.fillText(isEn() ? r.ingredient.realEn : r.ingredient.real, r.x + r.w / 2, r.y + 51, r.w - 8);
-      ctx.fillStyle = '#fff06d';
+      ctx.font = '900 9px system-ui, sans-serif';
+      ctx.fillText(isEn() ? r.ingredient.realEn : r.ingredient.real, r.x + r.w / 2, r.y + 52, r.w - 12);
+      ctx.fillStyle = '#d94b36';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(r.x + r.w - 10, r.y + 10, 13, 0, Math.PI * 2);
+      ctx.arc(r.x + r.w - 9, r.y + 8, 12, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = '#fff7df';
       ctx.font = '900 9px system-ui, sans-serif';
-      ctx.fillText(`×${count}`, r.x + r.w - 10, r.y + 10);
+      ctx.fillText(`×${count}`, r.x + r.w - 9, r.y + 8);
+      ctx.restore();
     });
   }
 
@@ -4162,25 +4430,98 @@
   function drawKitchenStove() {
     const stove = kitchenStoveRect();
     ctx.save();
-    ctx.fillStyle = '#fff2c4';
+    ctx.fillStyle = '#8f3f2d';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 4;
-    roundRect(stove.x, stove.y, stove.w, stove.h, 22, true, true, 4);
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'left';
+    roundRect(stove.x, stove.y + 45, stove.w, stove.h - 45, 12, true, true, 4);
+    ctx.fillStyle = '#d7d7cf';
+    ctx.beginPath();
+    ctx.moveTo(stove.x + 96, stove.y + 6);
+    ctx.lineTo(stove.x + stove.w - 18, stove.y + 6);
+    ctx.lineTo(stove.x + stove.w - 36, stove.y + 48);
+    ctx.lineTo(stove.x + 78, stove.y + 48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#52746c';
+    ctx.fillRect(stove.x + 82, stove.y + 45, stove.w - 98, 68);
+    ctx.strokeRect(stove.x + 82, stove.y + 45, stove.w - 98, 68);
+    ctx.fillStyle = '#2f4c47';
+    ctx.fillRect(stove.x + 82, stove.y + 113, stove.w - 98, stove.h - 113);
+    ctx.strokeRect(stove.x + 82, stove.y + 113, stove.w - 98, stove.h - 113);
+    ctx.fillStyle = '#4b3022';
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 13px system-ui, sans-serif';
-    ctx.fillText(ui('② 放进大灶台', '② Load the big stove'), stove.x + 16, stove.y + 20);
+    ctx.font = '900 9px system-ui, sans-serif';
+    ctx.fillText(ui('百味灶 · 备菜台', 'FLAVOR RANGE · PREP'), stove.x + stove.w * 0.65, stove.y + 23, stove.w - 120);
     ctx.restore();
 
     drawLeadKitchenChef(stove);
     drawKitchenSlots();
     const methods = kitchenMethodRects();
-    drawTab(methods.stir, ui('炒', 'Stir'), state.kitchenMethod === 'stir');
-    drawTab(methods.steam, ui('蒸', 'Steam'), state.kitchenMethod === 'steam');
+    drawKitchenMethodKnob(methods.stir, ui('炒', 'STIR'), state.kitchenMethod === 'stir', 'methodStir');
+    drawKitchenMethodKnob(methods.steam, ui('蒸', 'STEAM'), state.kitchenMethod === 'steam', 'methodSteam');
     if (state.save.kitchenJob) drawKitchenJobProgress();
-    else drawUIButton(kitchenCookButtonRect(), ui('③ 小厨师开工！', '③ Chefs, cook!'), ui(`厨师 ${totalChefCount()} · 预计 ${formatKitchenTime(kitchenCookDuration())}`, `${totalChefCount()} chefs · ${formatKitchenTime(kitchenCookDuration())}`), 'cookRecipe');
+    else drawKitchenIgnition();
     drawKitchenSteamFx(stove);
+  }
+
+  function drawKitchenMethodKnob(r, label, active, pressId) {
+    drawPressTransform(r, pressId, () => {
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      ctx.save();
+      ctx.fillStyle = active ? '#f1c95e' : '#c8cfca';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = active ? 3.5 : 2.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 17, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#a84631';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 12);
+      ctx.lineTo(cx + (active ? 8 : 0), cy - 6);
+      ctx.stroke();
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 9px system-ui, sans-serif';
+      ctx.fillText(label, cx, cy + 2, 30);
+      ctx.restore();
+    });
+  }
+
+  function drawKitchenIgnition() {
+    const r = kitchenCookButtonRect();
+    const duration = formatKitchenTime(kitchenCookDuration());
+    drawPressTransform(r, 'cookRecipe', () => {
+      ctx.save();
+      ctx.fillStyle = '#171d1c';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      roundRect(r.x, r.y, r.w, r.h, 7, true, true, 3);
+      ctx.fillStyle = '#f1c95e';
+      ctx.beginPath();
+      ctx.arc(r.x + 25, r.y + r.h / 2, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#c93b2d';
+      ctx.beginPath();
+      ctx.moveTo(r.x + 25, r.y + 10);
+      ctx.quadraticCurveTo(r.x + 37, r.y + 24, r.x + 25, r.y + 34);
+      ctx.quadraticCurveTo(r.x + 13, r.y + 24, r.x + 25, r.y + 10);
+      ctx.fill();
+      ctx.fillStyle = '#fff7df';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 12px system-ui, sans-serif';
+      ctx.fillText(ui(`拉杆开火 · ${duration}`, `IGNITE · ${duration}`), r.x + r.w * 0.60, r.y + 14, r.w - 55);
+      ctx.font = '700 8.5px system-ui, sans-serif';
+      ctx.fillText(ui(`${totalChefCount()} 名厨师待命`, `${totalChefCount()} chefs ready`), r.x + r.w * 0.60, r.y + 30, r.w - 55);
+      ctx.restore();
+    });
   }
 
   function drawKitchenJobProgress() {
@@ -4189,25 +4530,25 @@
     const progress = kitchenJobProgress();
     const remaining = Math.max(0, (job.finishAt - Date.now()) / 1000);
     ctx.save();
-    ctx.fillStyle = '#fffdf6';
+    ctx.fillStyle = '#171d1c';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 3;
-    roundRect(r.x, r.y, r.w, r.h, 13, true, true, 3);
+    roundRect(r.x, r.y, r.w, r.h, 7, true, true, 3);
     ctx.save();
     ctx.beginPath();
     roundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 11, false, false, 0);
     ctx.clip();
-    ctx.fillStyle = '#fff06d';
-    ctx.fillRect(r.x + 2, r.y + 2, (r.w - 4) * progress, r.h - 4);
+    ctx.fillStyle = '#c8452f';
+    ctx.fillRect(r.x + 2, r.y + r.h - 8, (r.w - 4) * progress, 6);
     ctx.restore();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#fff4cf';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 12px system-ui, sans-serif';
-    ctx.fillText(ui(`出餐中 ${formatKitchenTime(remaining)}`, `Cooking ${formatKitchenTime(remaining)}`), r.x + r.w / 2, r.y + 15);
+    ctx.font = '900 12px ui-monospace, monospace';
+    ctx.fillText(ui(`炉火 ${formatKitchenTime(remaining)}`, `HEAT ${formatKitchenTime(remaining)}`), r.x + r.w / 2, r.y + 14);
     ctx.font = '700 9px system-ui, sans-serif';
     const team = job.chefs > 0 ? ui(`${job.chefs} 名厨师协作`, `${job.chefs} chefs`) : ui('基础灶台', 'Base stove');
-    ctx.fillText(`${team} · ${Math.round(progress * 100)}%`, r.x + r.w / 2, r.y + 31);
+    ctx.fillText(`${team} · ${Math.round(progress * 100)}%`, r.x + r.w / 2, r.y + 28);
     ctx.restore();
   }
 
@@ -4216,25 +4557,32 @@
     const pet = PETS.find(item => item.id === preferred && petSave(item.id).met)
       || PETS.find(item => petSave(item.id).met);
     const bounce = state.kitchenCookFx > 0 ? Math.sin(state.t * 22) * 5 : Math.sin(state.t * 2.4) * 1.5;
-    const box = { x: stove.x + 12, y: stove.y + 42 + bounce, w: 64, h: 82 };
+    const box = { x: stove.x + 9, y: stove.y + 52 + bounce, w: 68, h: 72 };
     ctx.save();
-    ctx.fillStyle = pet ? pet.tint : '#e9e5da';
+    ctx.fillStyle = '#6a3b24';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 3;
-    roundRect(box.x, box.y, box.w, box.h, 15, true, true, 3);
+    ctx.beginPath();
+    ctx.ellipse(box.x + box.w / 2, box.y + box.h + 8, 28, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = pet ? pet.tint : '#e9e5da';
+    ctx.beginPath();
+    ctx.arc(box.x + box.w / 2, box.y + box.h / 2, 32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
     if (pet) {
       drawPetPortrait(pet, box);
       const count = petSave(pet.id).count;
       ctx.fillStyle = '#fff06d';
       ctx.beginPath();
-      ctx.arc(box.x + box.w - 7, box.y + 8, 13, 0, Math.PI * 2);
+      ctx.arc(box.x + box.w - 5, box.y + 7, 12, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#111';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 9px system-ui, sans-serif';
-      ctx.fillText(`×${count}`, box.x + box.w - 7, box.y + 8);
+      ctx.fillText(`×${count}`, box.x + box.w - 5, box.y + 7);
     } else {
       drawChefHat(box.x + box.w / 2, box.y + 29, 32);
       ctx.fillStyle = '#111';
@@ -4252,17 +4600,25 @@
       const ingredient = ingredientById(state.kitchenSlots[r.index]);
       const unlocked = r.index < available;
       ctx.save();
-      ctx.fillStyle = unlocked ? '#fffdf6' : '#d8d2c5';
+      ctx.fillStyle = unlocked ? '#fff0cf' : '#777d79';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = unlocked ? 4 : 2;
-      roundRect(r.x, r.y, r.w, r.h, 14, true, true, unlocked ? 4 : 2);
+      ctx.beginPath();
+      ctx.ellipse(r.x + r.w / 2, r.y + r.h * 0.58, r.w * 0.43, r.h * 0.36, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (unlocked) {
+        ctx.beginPath();
+        ctx.ellipse(r.x + r.w / 2, r.y + r.h * 0.47, r.w * 0.37, r.h * 0.22, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.fillStyle = '#111';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      if (ingredient) drawIngredientIcon(ingredient, r.x + r.w / 2, r.y + r.h / 2 - 5, 24);
+      if (ingredient) drawIngredientIcon(ingredient, r.x + r.w / 2, r.y + r.h / 2 - 2, 24);
       ctx.font = ingredient ? '900 8px system-ui, sans-serif' : '800 18px system-ui, sans-serif';
       const label = !unlocked ? '×' : ingredient ? (isEn() ? ingredient.realEn : ingredient.real) : '+';
-      ctx.fillText(label, r.x + r.w / 2, r.y + r.h - 8, r.w - 5);
+      ctx.fillText(label, r.x + r.w / 2, r.y + r.h - 3, r.w - 5);
       ctx.restore();
     });
   }
@@ -4293,15 +4649,19 @@
     if (!ingredient) return;
     ctx.save();
     ctx.globalAlpha = 0.88;
-    ctx.fillStyle = '#fff06d';
+    ctx.fillStyle = '#f3d58c';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 3;
-    roundRect(state.kitchenDrag.x - 38, state.kitchenDrag.y - 23, 76, 46, 12, true, true, 3);
+    ctx.beginPath();
+    ctx.ellipse(state.kitchenDrag.x, state.kitchenDrag.y, 38, 23, -0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    drawIngredientIcon(ingredient, state.kitchenDrag.x - 21, state.kitchenDrag.y, 24);
     ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 12px system-ui, sans-serif';
-    ctx.fillText(isEn() ? ingredient.realEn : ingredient.real, state.kitchenDrag.x, state.kitchenDrag.y, 68);
+    ctx.font = '900 10px system-ui, sans-serif';
+    ctx.fillText(isEn() ? ingredient.realEn : ingredient.real, state.kitchenDrag.x - 6, state.kitchenDrag.y, 39);
     ctx.restore();
   }
 
@@ -4310,26 +4670,85 @@
     const dish = state.save.platedDish;
     const count = totalDishCount();
     ctx.save();
-    ctx.fillStyle = dish || count ? '#fff6c7' : '#fffdf6';
+    ctx.fillStyle = '#33271f';
     ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
-    roundRect(r.x, r.y, r.w, r.h, 16, true, true, 3);
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
+    ctx.lineWidth = 4;
+    ctx.fillRect(r.x, r.y + 5, r.w, r.h - 5);
+    ctx.strokeRect(r.x, r.y + 5, r.w, r.h - 5);
+    ctx.fillStyle = '#7d492e';
+    ctx.fillRect(r.x - 4, r.y, r.w + 8, 13);
+    ctx.strokeRect(r.x - 4, r.y, r.w + 8, 13);
+    ctx.fillRect(r.x - 7, r.y + r.h - 10, r.w + 14, 15);
+    ctx.strokeRect(r.x - 7, r.y + r.h - 10, r.w + 14, 15);
+
+    const plateX = r.x + 54;
+    const plateY = r.y + r.h * 0.58;
+    ctx.fillStyle = dish && dish.id === 'dark' ? '#7c302b' : '#fff7df';
+    ctx.beginPath();
+    ctx.ellipse(plateX, plateY, 34, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (dish && dish.id === 'dark') {
+      ctx.fillStyle = '#151515';
+      ctx.beginPath();
+      ctx.arc(plateX, plateY - 5, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#e4b94e';
+      for (let i = 0; i < Math.min(4, Math.max(1, count)); i++) {
+        ctx.beginPath();
+        ctx.ellipse(plateX, plateY - 5 - i * 3, 23, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = '#fff3c8';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 12px system-ui, sans-serif';
-    ctx.fillText(ui('料理仓库 · 可以跨天囤货', 'Dish Stock · hold across days'), r.x + r.w / 2, r.y + 16);
-    ctx.font = dish || count ? '900 15px system-ui, sans-serif' : '700 11px system-ui, sans-serif';
+    ctx.font = '900 10px system-ui, sans-serif';
+    ctx.fillText(ui('传菜口 · 料理可跨天存放', 'SERVING HATCH · dishes keep'), r.x + 102, r.y + 19, r.w - 116);
+    ctx.font = dish || count ? '900 14px system-ui, sans-serif' : '700 10px system-ui, sans-serif';
     const title = dish && dish.id === 'dark' ? ui('黑暗料理', 'Dark Dish')
       : count ? ui(`已保存 ${count} 份料理`, `${count} dishes stored`)
       : ui('做好料理后会存入这里', 'Cooked dishes are stored here');
-    ctx.fillText(title, r.x + r.w / 2, r.y + 41, r.w - 24);
+    ctx.fillText(title, r.x + 102, r.y + 43, r.w - 116);
     ctx.font = '700 10px system-ui, sans-serif';
     const sub = dish ? ui('实验失败，需要先清理', 'Failed experiment; discard it')
       : ui('每日行情不同，高价时再出售', 'Daily prices change; sell when high');
-    ctx.fillText(sub, r.x + r.w / 2, r.y + r.h - 14, r.w - 24);
+    ctx.fillStyle = '#f0c96c';
+    ctx.fillText(sub, r.x + 102, r.y + r.h - 17, r.w - 116);
     ctx.restore();
-    drawUIButton(kitchenDishActionRect(), dish ? ui('丢弃料理', 'Discard Dish') : ui('查看今日行情', 'View Today’s Market'), dish ? '' : ui(`库存 ${count} 份`, `${count} in stock`), 'dishAction');
+    drawKitchenHangingMenu(dish, count);
+  }
+
+  function drawKitchenHangingMenu(dish, count) {
+    const r = kitchenDishActionRect();
+    drawPressTransform(r, 'dishAction', () => {
+      ctx.save();
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(r.x + 34, r.y);
+      ctx.lineTo(r.x + 52, r.y + 9);
+      ctx.moveTo(r.x + r.w - 34, r.y);
+      ctx.lineTo(r.x + r.w - 52, r.y + 9);
+      ctx.stroke();
+      ctx.fillStyle = dish ? '#7c302b' : '#263d38';
+      roundRect(r.x, r.y + 8, r.w, r.h - 8, 5, true, true, 2.5);
+      ctx.strokeStyle = '#f1d18a';
+      ctx.lineWidth = 1.5;
+      roundRect(r.x + 5, r.y + 13, r.w - 10, r.h - 18, 3, false, true, 1.5);
+      ctx.fillStyle = '#fff4cf';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 11px system-ui, sans-serif';
+      ctx.fillText(dish ? ui('端去清理', 'CLEAR PLATE') : ui('翻开今日菜单牌', 'OPEN TODAY’S MENU'), r.x + r.w / 2, r.y + 25, r.w - 18);
+      ctx.font = '700 8.5px system-ui, sans-serif';
+      ctx.fillText(dish ? ui('黑暗料理不能出售', 'Dark dish cannot sell') : ui(`架上共有 ${count} 份`, `${count} dishes on shelf`), r.x + r.w / 2, r.y + 38, r.w - 18);
+      ctx.restore();
+    });
   }
 
   function shopPrepareRect() {

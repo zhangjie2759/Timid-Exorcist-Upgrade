@@ -15,7 +15,8 @@ source = source.replace(/\}\)\(\);\s*$/, `
     normalizeSave, sanitizeLoadout, dailyPriceMultiplier, dailyDishPrice, businessTitleInfo, totalDishCount,
     hasCarriedSkill, openRunPreparation, openSkillShop,
     startCorridorAdvance, finishCorridorAdvance, handleSealClick,
-    handleBossSealClick, finishKitchenDrag, activeSkillButtonRect, carriedActiveSkill, runSkillButtonRects, resize, draw
+    handleBossSealClick, finishKitchenDrag, activeSkillButtonRect, carriedActiveSkill, runSkillButtonRects,
+    kitchenIngredientRects, kitchenStoveRect, kitchenDishRect, kitchenDishActionRect, kitchenPrepareRect, resize, draw
   };
 })();`);
 
@@ -106,7 +107,11 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.21.1_active_eye_slow_cooking');
+assert.equal(api.VERSION, 'v0.22.0_immersive_kitchen');
+assert.match(source, /function drawFutureOrbGlyph\(/, 'Foresight uses its own future-orb glyph');
+assert.match(source, /function drawKitchenRoomBackground\(/, 'kitchen has a dedicated room scene');
+assert.match(source, /function drawKitchenPantryShelf\(/, 'ingredients are integrated into a pantry shelf');
+assert.match(source, /function drawKitchenHangingMenu\(/, 'dish market is integrated into a hanging menu');
 assert.equal(api.INGREDIENTS.length, 4);
 assert.equal(api.RECIPES.length, 7);
 assert.equal(api.TEST_PANTRY_STOCK, 99);
@@ -327,13 +332,25 @@ assert.ok(activeButton.x > api.state.layout.sealButton.x + api.state.layout.seal
 assert.equal(api.carriedActiveSkill().id, 'ghostEyeSkill');
 assert.deepEqual(Array.from(api.runSkillButtonRects().map(rect => rect.id)), ['freshSeal'], 'active skill leaves the upper utility row');
 api.state.runLoadout = ['foresightSkill'];
-api.state.foresight = { untilRoom: api.state.room + 7, used: 1, readyRoom: api.state.room + 4 };
+api.state.screen = 'game';
+api.state.mode = 'normal';
+api.state.foresight = { untilRoom: api.state.room + 7, used: 1, maxPerRun: 2, readyRoom: api.state.room + 4 };
+api.draw();
+api.state.foresight.readyRoom = api.state.room;
 api.draw();
 assert.equal(api.carriedActiveSkill().id, 'foresightSkill', 'Foresight reuses the same active skill circle');
 api.state.screen = 'pets';
 api.state.kitchenView = 'cook';
 api.draw();
 assert.equal(api.state.layout.w, 360, 'compact phone kitchen renders at 360px width');
+assert.ok(api.kitchenIngredientRects().every(r => r.y < api.kitchenStoveRect().y), 'pantry shelf stays above the stove');
+assert.ok(api.kitchenDishRect().y > api.kitchenStoveRect().y, 'serving hatch stays below the stove');
+assert.ok(api.kitchenPrepareRect().y + api.kitchenPrepareRect().h <= api.state.layout.h, 'kitchen exit door remains on screen');
+assert.ok(api.kitchenDishActionRect().y + api.kitchenDishActionRect().h < api.kitchenPrepareRect().y, 'hanging menu does not overlap the kitchen exit');
+api.state.kitchenView = 'market';
+api.draw();
+api.state.kitchenView = 'chefs';
+api.draw();
 api.state.screen = 'prepare';
 api.state.save.dailySkills.ids = ['ghostEyeSkill', 'foresightSkill', 'freshSeal', 'preserveBag', 'revive', 'luckyFood'];
 api.openRunPreparation();
@@ -343,5 +360,10 @@ sandbox.window.innerHeight = 844;
 api.resize();
 api.draw();
 assert.equal(api.state.layout.h, 844, 'tall phone loadout renders at 844px height');
+api.state.screen = 'pets';
+api.state.kitchenView = 'cook';
+api.draw();
+assert.ok(api.kitchenIngredientRects().every(r => r.w >= 70 && r.h >= 60), 'tall phone pantry baskets remain touchable');
+assert.ok(api.kitchenDishActionRect().y + api.kitchenDishActionRect().h < api.kitchenPrepareRect().y, 'tall phone scene keeps the menu and exit separated');
 
 console.log('food-loop smoke test passed');
