@@ -9,7 +9,9 @@ source = source.replace(/\}\)\(\);\s*$/, `
   globalThis.__foodTest = {
     VERSION, INGREDIENTS, RECIPES, DAILY_SKILLS, GHOSTS, state,
     emptyRunRewards, cookSelectedRecipe, buyDailySkill, startRun,
-    rewardIngredientDrop, safeReturnHome, gameOver, recipeCount
+    rewardIngredientDrop, safeReturnHome, gameOver, recipeCount,
+    sellPlatedDish, discardPlatedDish, useDailyActiveSkill,
+    skillCooldownRemaining, generateDailyShopOffers, upgradeKitchenSlots
   };
 })();`);
 
@@ -100,40 +102,51 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.17.0_food_loop_greybox');
+assert.equal(api.VERSION, 'v0.18.0_kitchen_skill_build');
 assert.equal(api.INGREDIENTS.length, 4);
 assert.equal(api.RECIPES.length, 4);
 
 api.state.save.pantry.tomato = 1;
 api.state.save.pantry.egg = 1;
 api.state.kitchenMethod = 'stir';
-api.state.kitchenSelected = ['tomato', 'egg'];
+api.state.kitchenSlots = ['tomato', 'egg', null, null];
 api.cookSelectedRecipe();
 assert.equal(api.state.save.recipes.tomato_egg, true, 'valid experiment unlocks recipe');
-assert.equal(api.state.save.coins, 150, 'first recipe includes discovery bonus');
+assert.equal(api.state.save.coins, 0, 'cooking no longer auto-sells');
+assert.equal(api.state.save.platedDish.recipeId, 'tomato_egg', 'cooked dish waits on serving counter');
 assert.equal(api.state.save.pantry.tomato, 0);
 assert.equal(api.state.save.pantry.egg, 0);
+api.sellPlatedDish();
+assert.equal(api.state.save.coins, 150, 'selling is a separate action and includes discovery bonus');
+assert.equal(api.state.save.platedDish, null);
 
 api.state.save.pantry.tomato = 1;
 api.state.save.pantry.rice = 1;
-api.state.kitchenSelected = ['tomato', 'rice'];
+api.state.kitchenSlots = ['tomato', 'rice', null, null];
 api.cookSelectedRecipe();
 assert.equal(api.state.save.coins, 150, 'invalid experiment earns no coins');
+assert.equal(api.state.save.platedDish.id, 'dark', 'failed experiment produces a dark dish');
 assert.equal(api.state.save.pantry.tomato, 0, 'invalid experiment consumes ingredients');
 assert.equal(api.state.save.pantry.rice, 0, 'invalid experiment consumes ingredients');
+api.discardPlatedDish();
+assert.equal(api.state.save.platedDish, null, 'dark dish can be discarded');
 
 api.state.save.coins = 1000;
-api.buyDailySkill(api.DAILY_SKILLS[0]);
-assert.equal(api.state.save.dailySkills.ids.includes('steadyDoor'), true);
-assert.equal(api.state.save.coins, 840);
+api.state.save.dailySkills.offers = ['freshSeal', 'preserveBag', 'ghostEyeSkill'];
+api.buyDailySkill(api.DAILY_SKILLS.find(skill => skill.id === 'freshSeal'));
+api.buyDailySkill(api.DAILY_SKILLS.find(skill => skill.id === 'preserveBag'));
+api.buyDailySkill(api.DAILY_SKILLS.find(skill => skill.id === 'ghostEyeSkill'));
+assert.deepEqual(Array.from(api.state.save.dailySkills.ids), ['freshSeal', 'preserveBag', 'ghostEyeSkill'], 'daily skills have no two-skill cap');
+assert.equal(api.state.save.coins, 560, 'skills use fixed listed prices');
 
 api.state.save.recipes.egg_rice = true;
-api.buyDailySkill(api.DAILY_SKILLS[1]);
 api.startRun('normal');
-assert.equal(api.state.freshSeals, 2, 'daily Fresh Seal skill adds one charge');
+assert.equal(api.state.freshSeals, 1, 'Fresh Seal skill grants one charge per run');
+assert.equal(api.useDailyActiveSkill('ghostEyeSkill'), true, 'active skill can be used during a run');
+assert.equal(api.skillCooldownRemaining('ghostEyeSkill'), 4, 'active skill starts its per-run door cooldown');
 api.state.freshSealArmed = true;
 api.rewardIngredientDrop({ ghosts: [api.GHOSTS[0]] });
-assert.equal(api.state.freshSeals, 1, 'armed Fresh Seal consumes one charge');
+assert.equal(api.state.freshSeals, 0, 'armed Fresh Seal consumes one charge');
 assert.equal(Object.values(api.state.runRewards.ingredients).reduce((a, b) => a + b, 0), 1, 'armed Fresh Seal guarantees one ingredient');
 
 api.safeReturnHome();
@@ -144,6 +157,21 @@ api.startRun('normal');
 api.state.runRewards.ingredients.tomato = 2;
 api.gameOver('门开太久，鬼冲出来了');
 assert.equal(api.state.runRewards.ingredients.tomato, undefined, 'failure clears run ingredients');
-assert.equal(api.state.runRewards.lostIngredients.tomato, 2, 'failure records lost ingredients');
+assert.equal(api.state.runRewards.lostIngredients.tomato, 1, 'Fresh Pack removes one item from losses');
+assert.equal(api.state.runRewards.preservedIngredients.tomato, 1, 'Fresh Pack records the protected ingredient');
+
+api.state.save.dailySkills.ids.push('revive');
+api.startRun('normal');
+api.gameOver('门开太久，鬼冲出来了');
+assert.equal(api.state.reviveUsed, true, 'revive triggers once per run');
+assert.equal(api.state.screen, 'game', 'first lethal ghost escape does not end the run');
+api.gameOver('门开太久，鬼冲出来了');
+assert.equal(api.state.screen, 'result', 'second lethal ghost escape ends the run');
+
+api.state.save.coins = 1000;
+api.state.save.recipes.steamed_egg = true;
+api.upgradeKitchenSlots();
+assert.equal(api.state.save.kitchen.slots, 3, 'permanent kitchen upgrade unlocks a third slot');
+assert.equal(api.state.save.coins, 680, 'permanent kitchen upgrade spends coins once');
 
 console.log('food-loop smoke test passed');
