@@ -1,8 +1,17 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.20.0_single_door_eye_big_stove';
+  const VERSION = 'v0.21.0_daily_market_titles';
   const TEST_PANTRY_STOCK = 99;
+  const LOADOUT_LIMITS = { active: 1, support: 2 };
+  const BUSINESS_TITLES = [
+    { revenue: 0, name: '路边摊', nameEn: 'Street Stall' },
+    { revenue: 800, name: '大排档', nameEn: 'Food Stall' },
+    { revenue: 3000, name: '街坊小馆', nameEn: 'Neighborhood Bistro' },
+    { revenue: 10000, name: '人气酒楼', nameEn: 'Popular Restaurant' },
+    { revenue: 30000, name: '精品餐厅', nameEn: 'Fine Restaurant' },
+    { revenue: 80000, name: '星级大酒店', nameEn: 'Star Hotel' }
+  ];
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -107,8 +116,8 @@
   const DAILY_SKILLS = [
     { id: 'freshSeal', type: 'passive', name: '封鲜术', nameEn: 'Fresh Seal', desc: '每局获得1张封鲜符，保证一次食材掉落', descEn: 'Gain 1 Fresh Seal each run', price: 120, recipes: 0 },
     { id: 'preserveBag', type: 'passive', name: '保鲜背包', nameEn: 'Fresh Pack', desc: '失败时保住本局1份食材', descEn: 'Keep 1 run ingredient on failure', price: 140, recipes: 0 },
-    { id: 'ghostEyeSkill', type: 'active', cooldown: 8, name: '透视', nameEn: 'Ghost Eye', desc: '只看穿当前门，换门失效，冷却8次开门', descEn: 'Reveal only this door; ends on advance; 8-door cooldown', price: 180, recipes: 1 },
-    { id: 'foresightSkill', type: 'active', cooldown: 7, name: '遇见未来', nameEn: 'Foresight', desc: '预览后面5扇门，冷却7次开门', descEn: 'Preview 5 doors; 7-door cooldown', price: 240, recipes: 2 },
+    { id: 'ghostEyeSkill', type: 'active', duration: 5, cooldownSeconds: 30, name: '透视', nameEn: 'Ghost Eye', desc: '看穿门后5秒，冷却30秒', descEn: 'Reveal doors for 5s; 30s cooldown', price: 180, recipes: 1 },
+    { id: 'foresightSkill', type: 'active', cooldown: 7, maxPerRun: 2, name: '遇见未来', nameEn: 'Foresight', desc: '预览后面5扇门，每局2次，冷却7次开门', descEn: 'Preview 5 doors; 2 uses/run; 7-door cooldown', price: 240, recipes: 2 },
     { id: 'revive', type: 'trigger', name: '替身纸人', nameEn: 'Paper Double', desc: '妖怪冲出时自动复活，每局1次', descEn: 'Revive once per run after a ghost escape', price: 260, recipes: 2 },
     { id: 'luckyFood', type: 'passive', name: '寻味香囊', nameEn: 'Flavor Charm', desc: '普通封印的食材掉落率提高', descEn: 'Raises normal ingredient drop chance', price: 200, recipes: 3 }
   ];
@@ -151,7 +160,7 @@
     transitionStartDoor: 0,
     corridorOffset: 0,
     pendingNextRoom: 2,
-    ghostEyeRoom: 0,
+    ghostEyeUntil: 0,
     eyeFx: 0,
     sealFlash: 0,
     bossDefeated: {},
@@ -202,6 +211,7 @@
     freshSealArmed: false,
     freshSeals: 1,
     skillReadyRoom: {},
+    skillReadyAt: {},
     reviveUsed: false,
     runSucceeded: false,
     rulesScroll: 0,
@@ -230,6 +240,22 @@
     }
   }
 
+  function skillLoadoutGroup(skill) {
+    return skill && skill.type === 'active' ? 'active' : 'support';
+  }
+
+  function sanitizeLoadout(ids, ownedIds = ids) {
+    const owned = new Set(ownedIds || []);
+    const selected = { active: [], support: [] };
+    Array.from(new Set(ids || [])).forEach(id => {
+      const skill = dailySkillById(id);
+      if (!skill || !owned.has(id)) return;
+      const group = skillLoadoutGroup(skill);
+      if (selected[group].length < LOADOUT_LIMITS[group]) selected[group].push(id);
+    });
+    return [...selected.active, ...selected.support];
+  }
+
   function normalizeSave(data) {
     const pets = {};
     PETS.forEach(p => {
@@ -245,12 +271,21 @@
           date: storedDaily.date,
           ids: Array.from(new Set((storedDaily.ids || []).filter(id => DAILY_SKILLS.some(s => s.id === id)))),
           offers: Array.from(new Set((storedDaily.offers || []).filter(id => DAILY_SKILLS.some(s => s.id === id)))).slice(0, 3),
-          loadout: Array.from(new Set((storedDaily.loadout || []).filter(id => (storedDaily.ids || []).includes(id) && DAILY_SKILLS.some(s => s.id === id)))).slice(0, 3)
+          loadout: sanitizeLoadout(storedDaily.loadout || [], storedDaily.ids || [])
         }
       : { date: localDayKey(), ids: [], offers: [], loadout: [] };
     const storedKitchen = data.kitchen || {};
-    const platedDish = data.platedDish && (data.platedDish.id === 'dark' || RECIPES.some(r => r.id === data.platedDish.recipeId))
-      ? data.platedDish
+    const dishInventory = normalizeCountMap(data.dishInventory, RECIPES.map(recipe => recipe.id));
+    const firstSaleBonuses = { ...(data.firstSaleBonuses || {}) };
+    if (data.platedDish && RECIPES.some(recipe => recipe.id === data.platedDish.recipeId)) {
+      dishInventory[data.platedDish.recipeId] += 1;
+      if (data.platedDish.first) firstSaleBonuses[data.platedDish.recipeId] = true;
+    }
+    const platedDish = data.platedDish && data.platedDish.id === 'dark' ? { id: 'dark' } : null;
+    const rawJob = data.kitchenJob || null;
+    const kitchenJob = rawJob && (rawJob.recipeId === 'dark' || RECIPES.some(recipe => recipe.id === rawJob.recipeId))
+      && Number.isFinite(Number(rawJob.startedAt)) && Number.isFinite(Number(rawJob.finishAt))
+      ? { recipeId: rawJob.recipeId, startedAt: Number(rawJob.startedAt), finishAt: Number(rawJob.finishAt), chefs: Math.max(0, Number(rawJob.chefs || 0)) }
       : null;
     const pantry = normalizeCountMap(data.pantry, INGREDIENTS.map(i => i.id));
     INGREDIENTS.forEach(ingredient => { pantry[ingredient.id] = Math.max(pantry[ingredient.id], TEST_PANTRY_STOCK); });
@@ -265,9 +300,13 @@
       pantry,
       recipes: data.recipes || {},
       coins: Math.max(0, Number(data.coins || 0)),
+      lifetimeRevenue: Math.max(0, Number(data.lifetimeRevenue || 0)),
+      dishInventory,
+      firstSaleBonuses,
       dailySkills,
       kitchen: { slots: clamp(Math.round(Number(storedKitchen.slots || 3)), 3, 4) },
-      platedDish
+      platedDish,
+      kitchenJob
     };
   }
 
@@ -299,6 +338,37 @@
 
   function ingredientById(id) { return INGREDIENTS.find(i => i.id === id) || null; }
   function recipeCount() { return Object.keys(state.save.recipes || {}).filter(id => state.save.recipes[id]).length; }
+  function totalDishCount() { return Object.values(state.save.dishInventory || {}).reduce((sum, count) => sum + Math.max(0, Number(count || 0)), 0); }
+  function stableHash(text) {
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+  function dailyPriceMultiplier(recipe, day = localDayKey()) {
+    const steps = [0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30, 1.35, 1.40];
+    return steps[stableHash(`${day}:${recipe.id}`) % steps.length];
+  }
+  function dailyDishPrice(recipe, day = localDayKey()) {
+    return Math.max(5, Math.round((recipe.price * dailyPriceMultiplier(recipe, day)) / 5) * 5);
+  }
+  function marketTrend(recipe) {
+    const multiplier = dailyPriceMultiplier(recipe);
+    if (multiplier >= 1.25) return { name: '火爆', nameEn: 'HOT', color: '#b72820' };
+    if (multiplier >= 1.10) return { name: '上涨', nameEn: 'UP', color: '#d66a20' };
+    if (multiplier <= 0.85) return { name: '低迷', nameEn: 'LOW', color: '#3576a8' };
+    if (multiplier < 1) return { name: '回落', nameEn: 'DOWN', color: '#66727b' };
+    return { name: '平稳', nameEn: 'STEADY', color: '#247446' };
+  }
+  function businessTitleInfo() {
+    const revenue = Math.max(0, Number(state.save.lifetimeRevenue || 0));
+    let current = BUSINESS_TITLES[0];
+    BUSINESS_TITLES.forEach(title => { if (revenue >= title.revenue) current = title; });
+    const next = BUSINESS_TITLES.find(title => title.revenue > revenue) || null;
+    return { current, next, revenue };
+  }
   function hasDailySkill(id) {
     if (!state.save.dailySkills || state.save.dailySkills.date !== localDayKey()) {
       state.save.dailySkills = { date: localDayKey(), ids: [], offers: [], loadout: [] };
@@ -329,7 +399,12 @@
   }
 
   function skillCooldownRemaining(id) {
+    if (id === 'ghostEyeSkill') return Math.max(0, Math.ceil(Number(state.skillReadyAt[id] || 0) - state.t));
     return Math.max(0, Number(state.skillReadyRoom[id] || 0) - state.room);
+  }
+
+  function ghostEyeRemaining() {
+    return Math.max(0, Number(state.ghostEyeUntil || 0) - state.t);
   }
 
   function useDailyActiveSkill(id) {
@@ -341,13 +416,17 @@
       return false;
     }
     if (id === 'ghostEyeSkill') {
-      state.ghostEyeRoom = state.room;
+      state.ghostEyeUntil = state.t + skill.duration;
       state.eyeFx = 1.05;
-      state.skillReadyRoom[id] = state.room + skill.cooldown;
-      setToast(ui('透视开启：只看清这一扇门', 'Ghost Eye reveals only this door'), 1.5);
+      state.skillReadyAt[id] = state.t + skill.cooldownSeconds;
+      setToast(ui(`透视开启：${skill.duration}秒内看穿门后`, `Ghost Eye reveals doors for ${skill.duration}s`), 1.5);
       return true;
     }
     if (id === 'foresightSkill') {
+      if (!canTriggerForesight()) {
+        setToast(ui('本局遇见未来的次数已经用完', 'No Foresight uses left this run'), 1.3);
+        return false;
+      }
       state.skillReadyRoom[id] = state.room + skill.cooldown;
       return startForesightPreview(state.room + 1, 'game');
     }
@@ -779,15 +858,16 @@
     state.mode = 'normal';
     state.door = 0;
     state.danger = 0;
-    state.ghostEyeRoom = 0;
+    state.ghostEyeUntil = 0;
     state.eyeFx = 0;
     state.bossDefeated = {};
     state.futureQueue = [];
-    state.foresight = { active: false, phase: 'prepare', index: 0, timer: 0, count: 5, perDoorTime: testMode ? 0.58 : 0.46, prepareTime: 1.15, returnTime: 0.65, used: 0, maxPerRun: hasCarriedSkill('foresightSkill') ? 99 : 0, returnTo: 'game' };
+    state.foresight = { active: false, phase: 'prepare', index: 0, timer: 0, count: 5, perDoorTime: testMode ? 0.58 : 0.46, prepareTime: 1.15, returnTime: 0.65, used: 0, maxPerRun: hasCarriedSkill('foresightSkill') ? 2 : 0, returnTo: 'game' };
     state.runRewards = emptyRunRewards();
     state.freshSealArmed = false;
     state.freshSeals = hasCarriedSkill('freshSeal') ? 1 : 0;
     state.skillReadyRoom = {};
+    state.skillReadyAt = {};
     state.reviveUsed = false;
     state.runSucceeded = false;
     state.toast = null;
@@ -1288,8 +1368,6 @@
   }
 
   function startCorridorAdvance(toRoom = state.room + 1) {
-    // 透视绑定激活时的当前门，开始换门就立即失效。
-    state.ghostEyeRoom = 0;
     state.mode = 'corridorTransition';
     state.transition = 0;
     state.transitionStartDoor = state.door;
@@ -1465,6 +1543,7 @@
   function update(dt) {
     state.t += dt;
     updateAudio(dt);
+    finishKitchenJobIfReady();
 
     if (state.screen === 'preload') {
       state.preloadElapsed += dt;
@@ -1771,7 +1850,7 @@
     hasDailySkill('__refresh__');
     const owned = state.save.dailySkills.ids || [];
     const saved = state.save.dailySkills.loadout || [];
-    state.runLoadout = saved.filter(id => owned.includes(id)).slice(0, 3);
+    state.runLoadout = sanitizeLoadout(saved, owned);
     state.screen = 'prepare';
   }
 
@@ -1788,7 +1867,23 @@
     const gap = 12;
     const margin = 20;
     const w = (l.w - margin * 2 - gap) / 2;
-    return owned.map((skill, i) => ({ skill, x: margin + (i % 2) * (w + gap), y: 188 + Math.floor(i / 2) * 116, w, h: 102 }));
+    const compact = l.h < 720;
+    const cardH = compact ? 70 : 84;
+    const activeY = compact ? 208 : 222;
+    const supportY = compact ? 318 : 364;
+    const rowGap = compact ? 8 : 8;
+    const make = (skills, group, startY) => skills.map((skill, i) => ({
+      skill,
+      group,
+      x: margin + (i % 2) * (w + gap),
+      y: startY + Math.floor(i / 2) * (cardH + rowGap),
+      w,
+      h: cardH
+    }));
+    return [
+      ...make(owned.filter(skill => skillLoadoutGroup(skill) === 'active'), 'active', activeY),
+      ...make(owned.filter(skill => skillLoadoutGroup(skill) === 'support'), 'support', supportY)
+    ];
   }
 
   function prepareButtons() {
@@ -1807,8 +1902,13 @@
       const id = r.skill.id;
       const selected = state.runLoadout.includes(id);
       if (selected) state.runLoadout = state.runLoadout.filter(item => item !== id);
-      else if (state.runLoadout.length < 3) state.runLoadout.push(id);
-      else setToast(ui('每局最多携带 3 个技能', 'Carry up to 3 skills per run'), 1.3);
+      else {
+        const group = skillLoadoutGroup(r.skill);
+        const count = state.runLoadout.filter(item => skillLoadoutGroup(dailySkillById(item)) === group).length;
+        if (count < LOADOUT_LIMITS[group]) state.runLoadout.push(id);
+        else if (group === 'active') setToast(ui('主动技能槽只有 1 格', 'Only 1 active skill slot'), 1.3);
+        else setToast(ui('被动/触发技能槽最多 2 格', 'Up to 2 passive/trigger slots'), 1.3);
+      }
       state.save.dailySkills.loadout = state.runLoadout.slice();
       saveGame();
       setPressed(`prepare-${id}`);
@@ -1892,13 +1992,22 @@
     const back = backButtonRect();
     if (hit(p, inflate(back, 8))) {
       setPressed('back');
-      if (state.kitchenView === 'chefs') {
+      if (state.kitchenView === 'chefs' || state.kitchenView === 'market') {
         state.kitchenView = 'cook';
         state.petScroll = 0;
       } else {
         state.screen = 'menu';
       }
       state.petDragging = false;
+      return;
+    }
+    if (state.kitchenView === 'market') {
+      for (const r of kitchenMarketCardRects()) {
+        if (!hit(p, inflate(r, 5))) continue;
+        setPressed(`market-${r.recipe.id}`);
+        sellStoredDish(r.recipe.id);
+        return;
+      }
       return;
     }
     if (state.kitchenView === 'chefs') {
@@ -2133,23 +2242,49 @@
     ctx.font = '900 30px system-ui, sans-serif';
     ctx.fillText(ui('出发准备', 'Run Loadout'), l.w / 2, 112);
     ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText(ui(`选择本局携带技能 ${state.runLoadout.length}/3`, `Choose carried skills ${state.runLoadout.length}/3`), l.w / 2, 145);
+    ctx.fillText(ui('主动 1 格 · 被动/触发 2 格', '1 active · 2 passive/trigger'), l.w / 2, 145);
     ctx.restore();
 
     const rects = prepareSkillRects();
     if (!rects.length) {
       ctx.save();
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = '#777';
       ctx.textAlign = 'center';
-      ctx.font = '800 14px system-ui, sans-serif';
-      wrapText(ui('今天还没有技能，也可以直接出发。每局结束后可进入独立技能铺购买。', 'No skills owned today. You can still depart, or buy from the run shop after a run.'), l.w / 2, 240, l.w - 70, 22, 'center');
+      ctx.font = '800 12px system-ui, sans-serif';
+      ctx.fillText(ui('今日暂无主动技能', 'No active skill today'), l.w / 2, (l.h < 720 ? 247 : 267));
+      ctx.fillText(ui('今日暂无被动 / 触发技能，也可以直接出发', 'No support skill today; you may still depart'), l.w / 2, (l.h < 720 ? 357 : 407));
       ctx.restore();
     }
+    const compact = l.h < 720;
+    const activeCount = state.runLoadout.filter(id => skillLoadoutGroup(dailySkillById(id)) === 'active').length;
+    const supportCount = state.runLoadout.filter(id => skillLoadoutGroup(dailySkillById(id)) === 'support').length;
+    drawPrepareGroupHeader(compact ? 176 : 180, ui(`主动技能槽 ${activeCount}/1`, `Active slot ${activeCount}/1`), ui('手动点击使用', 'Tap to use'));
+    drawPrepareGroupHeader(compact ? 286 : 322, ui(`被动 / 触发槽 ${supportCount}/2`, `Passive / trigger ${supportCount}/2`), ui('携带后自动生效', 'Automatic when carried'));
     rects.forEach(r => drawPrepareSkillCard(r));
 
     const buttons = prepareButtons();
     drawUIButton(buttons.start, ui('开始巡夜', 'Start Patrol'), ui(`已携带 ${state.runLoadout.length} 个技能`, `${state.runLoadout.length} skills carried`), 'prepareStart');
     drawUIButton(buttons.back, ui('返回门口', 'Back to Entrance'), '', 'prepareBack');
+  }
+
+  function drawPrepareGroupHeader(y, title, sub) {
+    const l = state.layout;
+    ctx.save();
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 13px system-ui, sans-serif';
+    ctx.fillText(title, 22, y + 13);
+    ctx.textAlign = 'right';
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillText(sub, l.w - 22, y + 13);
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(20, y + 26);
+    ctx.lineTo(l.w - 20, y + 26);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawPrepareSkillCard(r) {
@@ -2162,13 +2297,14 @@
       ctx.fillStyle = selected ? '#fffdf6' : '#111';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.font = '900 15px system-ui, sans-serif';
-      ctx.fillText(isEn() ? r.skill.nameEn : r.skill.name, r.x + 12, r.y + 12, r.w - 24);
-      ctx.font = '700 10.5px system-ui, sans-serif';
-      wrapText(isEn() ? r.skill.descEn : r.skill.desc, r.x + 12, r.y + 38, r.w - 24, 14, 'left');
+      ctx.font = '900 14px system-ui, sans-serif';
+      ctx.fillText(isEn() ? r.skill.nameEn : r.skill.name, r.x + 10, r.y + 10, r.w - 70);
       ctx.textAlign = 'right';
-      ctx.font = '900 11px system-ui, sans-serif';
-      ctx.fillText(selected ? ui('已携带', 'CARRIED') : ui('点选携带', 'TAP TO CARRY'), r.x + r.w - 12, r.y + r.h - 17);
+      ctx.font = '900 9.5px system-ui, sans-serif';
+      ctx.fillText(selected ? ui('已装入', 'EQUIPPED') : (r.group === 'active' ? ui('主动', 'ACTIVE') : ui('被动', 'SUPPORT')), r.x + r.w - 10, r.y + 12);
+      ctx.textAlign = 'left';
+      ctx.font = `${r.h < 80 ? 9.5 : 10}px system-ui, sans-serif`;
+      wrapText(isEn() ? r.skill.descEn : r.skill.desc, r.x + 10, r.y + 32, r.w - 20, r.h < 80 ? 12 : 13, 'left');
     });
   }
 
@@ -2487,7 +2623,7 @@
   }
 
   function doorAlphaForGhostEye() {
-    if (state.ghostEyeRoom === state.room && state.mode === 'normal') return 0.42;
+    if (ghostEyeRemaining() > 0) return 0.42;
     return 1;
   }
 
@@ -2921,9 +3057,9 @@
       ctx.font = '900 10px system-ui, sans-serif';
       ctx.fillText('TEST', l.w - 10, 82);
     }
-    if (state.ghostEyeRoom === state.room && state.mode === 'normal') {
+    if (ghostEyeRemaining() > 0 && state.mode === 'normal') {
       ctx.font = '800 11px system-ui, sans-serif';
-      ctx.fillText(ui('透视：仅此门', 'Eye: this door'), l.w - 10, l.topH - 29);
+      ctx.fillText(ui(`透视：${ghostEyeRemaining().toFixed(1)}秒`, `Eye: ${ghostEyeRemaining().toFixed(1)}s`), l.w - 10, l.topH - 29);
     }
 
     if (state.mode === 'bossFight' && state.content && state.content.type === 'boss') {
@@ -2979,13 +3115,17 @@
   function drawRunSkillButton(r) {
     const active = r.id === 'freshSeal' && state.freshSealArmed;
     const remaining = r.id === 'freshSeal' ? 0 : skillCooldownRemaining(r.id);
+    const foresightUsesLeft = r.id === 'foresightSkill' ? Math.max(0, state.foresight.maxPerRun - state.foresight.used) : 0;
+    const exhausted = r.id === 'foresightSkill' && foresightUsesLeft <= 0;
     const labels = {
       freshSeal: ui(`封鲜符 ×${state.freshSeals}`, `Fresh ×${state.freshSeals}`),
-      ghostEyeSkill: remaining ? ui(`透视 ${remaining}门`, `Eye ${remaining}`) : ui('透视', 'Eye'),
-      foresightSkill: remaining ? ui(`未来 ${remaining}门`, `Future ${remaining}`) : ui('遇见未来', 'Future')
+      ghostEyeSkill: remaining ? ui(`透视 ${remaining}秒`, `Eye ${remaining}s`) : ui('透视', 'Eye'),
+      foresightSkill: exhausted ? ui('未来 已用完', 'Future 0 left')
+        : remaining ? ui(`未来 ${remaining}门 · 余${foresightUsesLeft}`, `Future ${remaining} · ${foresightUsesLeft} left`)
+          : ui(`遇见未来 ×${foresightUsesLeft}`, `Future ×${foresightUsesLeft}`)
     };
     drawPressTransform(r, `runSkill-${r.id}`, () => {
-      ctx.fillStyle = active ? '#b72820' : remaining ? '#ddd8cc' : '#fffdf6';
+      ctx.fillStyle = active ? '#b72820' : remaining || exhausted ? '#ddd8cc' : '#fffdf6';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 3;
       roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
@@ -3118,13 +3258,14 @@
       '6. A successful ghost seal may leave a fantasy ingredient. Arm the Fresh Seal to guarantee one drop.',
       '7. Tap Return during a run to stop safely and bring ingredients to the kitchen. Failure loses run ingredients.',
       '8. Drag or tap ingredients into kitchen slots, then choose Stir-fry or Steam. Failed experiments consume ingredients.',
-      '9. Cooking places a dish on the serving counter. Selling is a separate action.',
-      '10. Every finished run refreshes the skill shop. Bought skills last until local midnight; choose up to 3 before each patrol.',
-      '11. Animals wear chef hats and grow as kitchen teams only. They never join patrol runs.',
-      '12. Only skills carried in the current loadout can work. Ghosts never grant skills after sealing.',
-      '13. Ghost Eye reveals only the current door, ends when you advance, and cools down for 8 doors.',
-      '14. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
-      '15. Zhuyin remains a rare boss-like spirit, but sealing it grants only normal rewards and ingredients.'
+      '9. Successful dishes enter permanent dish stock. Daily prices refresh at local midnight, so low-price dishes can be held for later.',
+      '10. Selling adds permanent lifetime revenue and promotes the kitchen from Street Stall toward Star Hotel titles.',
+      '11. Every finished run refreshes the skill shop. Bought skills last until local midnight; carry 1 active and up to 2 passive/trigger skills.',
+      '12. Animals wear chef hats and grow as kitchen teams only. More chefs shorten the cooking progress time; they never join patrol runs.',
+      '13. Only skills carried in the current loadout can work. Ghosts never grant skills after sealing.',
+      '14. Ghost Eye reveals doors for 5 seconds and cools down for 30 seconds. Foresight is limited to 2 uses per run.',
+      '15. Bosses appear near every 25th door. Confirm the Boss, close the door, then seal rapidly.',
+      '16. Zhuyin remains a rare boss-like spirit, but sealing it grants only normal rewards and ingredients.'
     ] : [
       '1. 拖动红木滑门向左开门，松手后会自动吸附开/关。',
       '2. 判断成功后，当前门位会横向滑走，新的门从长廊另一侧滑入。',
@@ -3134,13 +3275,14 @@
       '6. 成功封印妖怪有概率留下幻想食材；先点亮封鲜符，本次成功封印保证获得食材。',
       '7. 闯关时点击“收工”就是见好就收，食材安全送进厨房；失败会清空本局食材。',
       '8. 在厨房把食材拖入或点入料理格，再选择炒锅或蒸笼；实验失败也会消耗食材。',
-      '9. 做好的料理先进入出餐台，玩家再单独点击出售。',
-      '10. 每局结束刷新技能商店；买下的技能当天拥有，并在每次出发前选择最多3个携带，00:00清空。',
-      '11. 小动物统一戴厨师帽，只作为厨房队伍累计，不再进入巡夜提供局内效果。',
-      '12. 只有本局出发前携带的技能能够生效；封印任何妖怪都不会额外赠送技能。',
-      '13. 透视只看穿当前这一扇门，换门立即失效，并冷却8次开门。',
-      '14. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
-      '15. 烛阴仍是极少现身的Boss级妖怪，但封印后只结算常规奖励与食材。'
+      '9. 成功料理会进入可跨天保存的料理仓库；每日00:00刷新售价，低价时可以先囤货。',
+      '10. 卖餐会累计永久营业收入，并让称号从「路边摊」逐步晋升至「星级大酒店」。',
+      '11. 每局结束刷新技能商店；买下的技能当天拥有，出发前可携带1个主动技能及最多2个被动/触发技能，00:00清空。',
+      '12. 小动物统一戴厨师帽并累计为厨房队伍；厨师越多，出餐进度越快，但不进入巡夜。',
+      '13. 只有本局出发前携带的技能能够生效；封印任何妖怪都不会额外赠送技能。',
+      '14. 透视开启后持续看穿门后5秒并冷却30秒；遇见未来每局最多使用2次。',
+      '15. 每25关附近会出现Boss：先开门确认，再关门疯狂贴符。',
+      '16. 烛阴仍是极少现身的Boss级妖怪，但封印后只结算常规奖励与食材。'
     ];
   }
 
@@ -3302,6 +3444,10 @@
       drawKitchenChefRoster();
       return;
     }
+    if (state.kitchenView === 'market') {
+      drawKitchenMarket();
+      return;
+    }
 
     ctx.save();
     ctx.fillStyle = '#111';
@@ -3311,7 +3457,8 @@
     ctx.font = compactTitle ? '900 22px system-ui, sans-serif' : '900 25px system-ui, sans-serif';
     ctx.fillText(compactTitle ? ui('百味厨房', 'Kitchen') : ui('小厨师大灶台', 'Little Chef Stove'), l.w / 2 + 28, 38);
     ctx.font = '800 11px system-ui, sans-serif';
-    ctx.fillText(ui(`铜钱 ${state.save.coins || 0} · 食谱 ${recipeCount()}/${RECIPES.length}`, `Coins ${state.save.coins || 0} · Recipes ${recipeCount()}/${RECIPES.length}`), l.w / 2, 64);
+    const title = businessTitleInfo().current;
+    ctx.fillText(ui(`${title.name} · 铜钱 ${state.save.coins || 0} · 料理库存 ${totalDishCount()}`, `${title.nameEn} · Coins ${state.save.coins || 0} · Dishes ${totalDishCount()}`), l.w / 2, 64, l.w - 28);
     ctx.restore();
 
     drawKitchenShortcuts();
@@ -3340,6 +3487,73 @@
       drawPetCard(r, r.pet);
     });
     ctx.restore();
+  }
+
+  function kitchenMarketCardRects() {
+    const l = state.layout;
+    const margin = 16;
+    const gap = 8;
+    const w = (l.w - margin * 2 - gap) / 2;
+    return RECIPES.map((recipe, i) => ({
+      recipe,
+      x: margin + (i % 2) * (w + gap),
+      y: 142 + Math.floor(i / 2) * 90,
+      w,
+      h: 82
+    }));
+  }
+
+  function drawKitchenMarket() {
+    const l = state.layout;
+    const title = businessTitleInfo();
+    const compactTitle = l.w < 380;
+    ctx.save();
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${compactTitle ? 20 : 24}px system-ui, sans-serif`;
+    ctx.fillText(ui('今日料理行情', 'Daily Dish Market'), l.w / 2 + (compactTitle ? 34 : 24), 38, l.w - 150);
+    ctx.font = '900 12px system-ui, sans-serif';
+    ctx.fillText(ui(`称号：${title.current.name} · 累计收入 ${title.revenue}`, `Title: ${title.current.nameEn} · Revenue ${title.revenue}`), l.w / 2, 74, l.w - 34);
+    ctx.font = '700 10.5px system-ui, sans-serif';
+    const progress = title.next
+      ? ui(`再赚 ${title.next.revenue - title.revenue} 铜钱升级为「${title.next.name}」`, `Earn ${title.next.revenue - title.revenue} more for ${title.next.nameEn}`)
+      : ui('已达到最高称号「星级大酒店」', 'Highest title reached: Star Hotel');
+    ctx.fillText(progress, l.w / 2, 98, l.w - 34);
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillStyle = '#5d5548';
+    ctx.fillText(ui('价格每日 00:00 更新 · 点击有库存的料理出售 1 份', 'Prices refresh at 00:00 · tap stocked dish to sell one'), l.w / 2, 121, l.w - 28);
+    ctx.restore();
+    kitchenMarketCardRects().forEach(r => drawKitchenMarketCard(r));
+  }
+
+  function drawKitchenMarketCard(r) {
+    const known = !!state.save.recipes[r.recipe.id];
+    const stock = Math.max(0, Number(state.save.dishInventory[r.recipe.id] || 0));
+    const trend = marketTrend(r.recipe);
+    const price = dailyDishPrice(r.recipe);
+    const bonus = !!state.save.firstSaleBonuses[r.recipe.id];
+    drawPressTransform(r, `market-${r.recipe.id}`, () => {
+      ctx.fillStyle = known ? (stock > 0 ? '#fff6c7' : '#fffdf6') : '#e5e1d8';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      roundRect(r.x, r.y, r.w, r.h, 14, true, true, 3);
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 11px system-ui, sans-serif';
+      ctx.fillText(known ? (isEn() ? r.recipe.nameEn : r.recipe.name) : ui('未发现料理', 'Undiscovered'), r.x + 9, r.y + 15, r.w - 18);
+      ctx.font = '900 12px system-ui, sans-serif';
+      ctx.fillText(known ? ui(`今日 ${price} 铜钱`, `Today ${price} coins`) : '???', r.x + 9, r.y + 39, r.w - 62);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = known ? trend.color : '#777';
+      ctx.font = '900 10px system-ui, sans-serif';
+      ctx.fillText(known ? (isEn() ? trend.nameEn : trend.name) : 'LOCK', r.x + r.w - 9, r.y + 39);
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'left';
+      ctx.font = '800 10px system-ui, sans-serif';
+      ctx.fillText(known ? ui(`库存 ×${stock}${bonus ? ' · 首售+60' : ''}`, `Stock ×${stock}${bonus ? ' · first +60' : ''}`) : ui('继续探索食谱', 'Keep experimenting'), r.x + 9, r.y + 63, r.w - 18);
+    });
   }
 
   function totalChefCount() {
@@ -3483,7 +3697,7 @@
     if (hit(p, inflate(kitchenDishActionRect(), 7))) {
       setPressed('dishAction');
       if (state.save.platedDish && state.save.platedDish.id === 'dark') discardPlatedDish();
-      else sellPlatedDish();
+      else state.kitchenView = 'market';
       return;
     }
   }
@@ -3507,9 +3721,60 @@
     state.kitchenSlots[index] = drag.id;
   }
 
+  function kitchenCookDuration(chefCount = totalChefCount()) {
+    return Math.max(1.2, 6 / Math.sqrt(Math.max(1, chefCount)));
+  }
+
+  function kitchenJobProgress() {
+    const job = state.save.kitchenJob;
+    if (!job) return 0;
+    return clamp((Date.now() - job.startedAt) / Math.max(1, job.finishAt - job.startedAt), 0, 1);
+  }
+
+  function startKitchenJob(recipeId) {
+    const chefs = Math.max(0, totalChefCount());
+    const duration = kitchenCookDuration(chefs);
+    const startedAt = Date.now();
+    state.save.kitchenJob = { recipeId, chefs, startedAt, finishAt: startedAt + duration * 1000 };
+    state.kitchenCookFx = 1.15;
+    saveGame();
+    setToast(ui(`小厨师开工，预计 ${duration.toFixed(1)} 秒出餐`, `Chefs started; ready in ${duration.toFixed(1)}s`), 1.7);
+  }
+
+  function finishKitchenJobIfReady(force = false) {
+    const job = state.save && state.save.kitchenJob;
+    if (!job || (!force && Date.now() < job.finishAt)) return false;
+    state.save.kitchenJob = null;
+    if (job.recipeId === 'dark') {
+      state.save.platedDish = { id: 'dark' };
+      saveGame();
+      if (state.screen === 'pets') setToast(ui('出餐完成：黑暗料理需要清理', 'Ready: discard the dark dish'), 1.7);
+      return true;
+    }
+    const recipe = RECIPES.find(item => item.id === job.recipeId);
+    if (!recipe) {
+      saveGame();
+      return false;
+    }
+    const first = !state.save.recipes[recipe.id];
+    state.save.recipes[recipe.id] = true;
+    state.save.dishInventory[recipe.id] = (state.save.dishInventory[recipe.id] || 0) + 1;
+    if (first) state.save.firstSaleBonuses[recipe.id] = true;
+    saveGame();
+    if (state.screen === 'pets') setToast(first
+      ? ui(`发现新食谱：${recipe.name}，已存入料理仓库`, `New recipe: ${recipe.nameEn}. Stored for sale.`)
+      : ui(`${recipe.name}出餐完成，已存入仓库`, `${recipe.nameEn} is ready and stored`), 2.0);
+    return true;
+  }
+
   function cookSelectedRecipe() {
-    if (state.save.platedDish) {
-      setToast(ui('请先处理出餐台上的料理', 'Sell or discard the plated dish first'), 1.3);
+    finishKitchenJobIfReady();
+    if (state.save.kitchenJob) {
+      setToast(ui('小厨师正在出餐，请等待进度完成', 'Chefs are still cooking'), 1.3);
+      return;
+    }
+    if (state.save.platedDish && state.save.platedDish.id === 'dark') {
+      setToast(ui('请先清理出餐台上的黑暗料理', 'Discard the dark dish first'), 1.3);
       return;
     }
     const selected = state.kitchenSlots.slice(0, state.save.kitchen.slots).filter(Boolean).sort();
@@ -3527,40 +3792,41 @@
       && item.ingredients.slice().sort().join('|') === selected.join('|'));
     if (!recipe) {
       state.kitchenSlots = [null, null, null, null];
-      state.save.platedDish = { id: 'dark' };
-      state.kitchenCookFx = 1.15;
-      saveGame();
-      setToast(ui('黑暗料理已经放上出餐台', 'A dark dish is waiting on the counter'), 1.8);
+      startKitchenJob('dark');
       return;
     }
-    const first = !state.save.recipes[recipe.id];
-    state.save.recipes[recipe.id] = true;
-    state.save.platedDish = { recipeId: recipe.id, first };
     state.kitchenSlots = [null, null, null, null];
-    state.kitchenCookFx = 1.15;
-    saveGame();
-    setToast(first
-      ? ui(`发现新食谱：${recipe.name}，请决定是否出售`, `New recipe: ${recipe.nameEn}. Ready to sell.`)
-      : ui(`${recipe.name}已经上桌`, `${recipe.nameEn} is plated`), 2.1);
+    startKitchenJob(recipe.id);
   }
 
-  function platedRecipe() {
-    const dish = state.save.platedDish;
-    return dish && dish.recipeId ? RECIPES.find(recipe => recipe.id === dish.recipeId) || null : null;
+  function sellStoredDish(recipeId) {
+    const recipe = RECIPES.find(item => item.id === recipeId);
+    const stock = recipe ? Math.max(0, Number(state.save.dishInventory[recipe.id] || 0)) : 0;
+    if (!recipe || stock <= 0) {
+      setToast(ui('这道料理暂时没有库存', 'No stock for this dish'), 1.2);
+      return;
+    }
+    const oldTitle = businessTitleInfo().current;
+    const bonus = state.save.firstSaleBonuses[recipe.id] ? 60 : 0;
+    const income = dailyDishPrice(recipe) + bonus;
+    state.save.dishInventory[recipe.id] -= 1;
+    state.save.firstSaleBonuses[recipe.id] = false;
+    state.save.coins += income;
+    state.save.lifetimeRevenue += income;
+    saveGame();
+    const newTitle = businessTitleInfo().current;
+    setToast(newTitle !== oldTitle
+      ? ui(`料理出售 +${income}，晋升「${newTitle.name}」`, `Sold +${income}; promoted to ${newTitle.nameEn}`)
+      : ui(`按今日行情出售 +${income} 铜钱`, `Sold at today’s price +${income}`), 1.8);
   }
 
   function sellPlatedDish() {
-    const dish = state.save.platedDish;
-    const recipe = platedRecipe();
-    if (!dish || !recipe) {
-      setToast(ui('出餐台上还没有可以出售的料理', 'No dish is ready to sell'), 1.2);
+    const recipe = RECIPES.find(item => (state.save.dishInventory[item.id] || 0) > 0);
+    if (!recipe) {
+      setToast(ui('料理仓库暂时没有库存', 'Dish inventory is empty'), 1.2);
       return;
     }
-    const income = recipe.price + (dish.first ? 60 : 0);
-    state.save.coins += income;
-    state.save.platedDish = null;
-    saveGame();
-    setToast(ui(`料理出售 +${income} 铜钱`, `Dish sold +${income} coins`), 1.7);
+    sellStoredDish(recipe.id);
   }
 
   function discardPlatedDish() {
@@ -3732,8 +3998,37 @@
     const methods = kitchenMethodRects();
     drawTab(methods.stir, ui('炒', 'Stir'), state.kitchenMethod === 'stir');
     drawTab(methods.steam, ui('蒸', 'Steam'), state.kitchenMethod === 'steam');
-    drawUIButton(kitchenCookButtonRect(), ui('③ 小厨师开工！', '③ Chefs, cook!'), '', 'cookRecipe');
+    if (state.save.kitchenJob) drawKitchenJobProgress();
+    else drawUIButton(kitchenCookButtonRect(), ui('③ 小厨师开工！', '③ Chefs, cook!'), ui(`当前 ${totalChefCount()} 名厨师`, `${totalChefCount()} chefs ready`), 'cookRecipe');
     drawKitchenSteamFx(stove);
+  }
+
+  function drawKitchenJobProgress() {
+    const r = kitchenCookButtonRect();
+    const job = state.save.kitchenJob;
+    const progress = kitchenJobProgress();
+    const remaining = Math.max(0, (job.finishAt - Date.now()) / 1000);
+    ctx.save();
+    ctx.fillStyle = '#fffdf6';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 3;
+    roundRect(r.x, r.y, r.w, r.h, 13, true, true, 3);
+    ctx.save();
+    ctx.beginPath();
+    roundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 11, false, false, 0);
+    ctx.clip();
+    ctx.fillStyle = '#fff06d';
+    ctx.fillRect(r.x + 2, r.y + 2, (r.w - 4) * progress, r.h - 4);
+    ctx.restore();
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 12px system-ui, sans-serif';
+    ctx.fillText(ui(`出餐中 ${remaining.toFixed(1)}秒`, `Cooking ${remaining.toFixed(1)}s`), r.x + r.w / 2, r.y + 15);
+    ctx.font = '700 9px system-ui, sans-serif';
+    const team = job.chefs > 0 ? ui(`${job.chefs} 名厨师协作`, `${job.chefs} chefs`) : ui('基础灶台', 'Base stove');
+    ctx.fillText(`${team} · ${Math.round(progress * 100)}%`, r.x + r.w / 2, r.y + 31);
+    ctx.restore();
   }
 
   function drawLeadKitchenChef(stove) {
@@ -3833,9 +4128,9 @@
   function drawPlatedDish() {
     const r = kitchenDishRect();
     const dish = state.save.platedDish;
-    const recipe = platedRecipe();
+    const count = totalDishCount();
     ctx.save();
-    ctx.fillStyle = dish ? '#fff6c7' : '#fffdf6';
+    ctx.fillStyle = dish || count ? '#fff6c7' : '#fffdf6';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 3;
     roundRect(r.x, r.y, r.w, r.h, 16, true, true, 3);
@@ -3843,18 +4138,18 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 12px system-ui, sans-serif';
-    ctx.fillText(ui('出餐台 · 料理与出售分开', 'Serving · cooking and selling are separate'), r.x + r.w / 2, r.y + 16);
-    ctx.font = dish ? '900 15px system-ui, sans-serif' : '700 11px system-ui, sans-serif';
-    const title = !dish ? ui('料理完成后会先放在这里', 'Finished dishes wait here')
-      : dish.id === 'dark' ? ui('黑暗料理', 'Dark Dish')
-      : recipe ? (isEn() ? recipe.nameEn : recipe.name) : ui('未知料理', 'Unknown Dish');
+    ctx.fillText(ui('料理仓库 · 可以跨天囤货', 'Dish Stock · hold across days'), r.x + r.w / 2, r.y + 16);
+    ctx.font = dish || count ? '900 15px system-ui, sans-serif' : '700 11px system-ui, sans-serif';
+    const title = dish && dish.id === 'dark' ? ui('黑暗料理', 'Dark Dish')
+      : count ? ui(`已保存 ${count} 份料理`, `${count} dishes stored`)
+      : ui('做好料理后会存入这里', 'Cooked dishes are stored here');
     ctx.fillText(title, r.x + r.w / 2, r.y + 41, r.w - 24);
     ctx.font = '700 10px system-ui, sans-serif';
-    const sub = recipe ? ui(`售价 ${recipe.price}${dish.first ? '＋首次发现60' : ''} 铜钱`, `${recipe.price}${dish.first ? ' +60 discovery' : ''} coins`)
-      : dish ? ui('实验失败，需要清理', 'Failed experiment; discard it') : ui('制作与出售是两个独立步骤', 'Cooking and selling are separate');
+    const sub = dish ? ui('实验失败，需要先清理', 'Failed experiment; discard it')
+      : ui('每日行情不同，高价时再出售', 'Daily prices change; sell when high');
     ctx.fillText(sub, r.x + r.w / 2, r.y + r.h - 14, r.w - 24);
     ctx.restore();
-    if (dish) drawUIButton(kitchenDishActionRect(), dish.id === 'dark' ? ui('丢弃料理', 'Discard Dish') : ui('出售料理', 'Sell Dish'), '', 'dishAction');
+    drawUIButton(kitchenDishActionRect(), dish ? ui('丢弃料理', 'Discard Dish') : ui('查看今日行情', 'View Today’s Market'), dish ? '' : ui(`库存 ${count} 份`, `${count} in stock`), 'dishAction');
   }
 
   function shopPrepareRect() {
@@ -3920,7 +4215,7 @@
     } else {
       rects.forEach(r => drawDailySkillCard(r));
     }
-    drawUIButton(shopPrepareRect(), ui('去出发准备', 'Go to Loadout'), ui('最多携带3个技能', 'Carry up to 3 skills'), 'shopPrepare');
+    drawUIButton(shopPrepareRect(), ui('去出发准备', 'Go to Loadout'), ui('主动1格 · 被动/触发2格', '1 active · 2 support'), 'shopPrepare');
   }
 
   function drawDailySkillCard(r) {
@@ -4252,7 +4547,8 @@
     return ui(`${met}/${PETS.length} 厨房帮工`, `${met}/${PETS.length} kitchen helpers`);
   }
   function kitchenMenuSub() {
-    return ui(`铜钱 ${state.save.coins || 0} · 食谱 ${recipeCount()}/${RECIPES.length}`, `Coins ${state.save.coins || 0} · Recipes ${recipeCount()}/${RECIPES.length}`);
+    const title = businessTitleInfo().current;
+    return ui(`${title.name} · 料理库存 ${totalDishCount()}`, `${title.nameEn} · Dishes ${totalDishCount()}`);
   }
   function hasAnyPetMet() { return PETS.some(p => petSave(p.id).met); }
   function collectCountText() { return `${seenGhostCount() + seenPeopleCount()}/${GHOSTS.length + PEOPLE.length}`; }
