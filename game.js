@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.22.1_clear_market_board';
+  const VERSION = 'v0.22.2_simple_market_board';
   const TEST_PANTRY_STOCK = 99;
   const LOADOUT_LIMITS = { active: 1, support: 2 };
   const BUSINESS_TITLES = [
@@ -370,6 +370,12 @@
       arrow: percent >= 10 ? '↑' : percent <= -10 ? '↓' : '→',
       text: percent > 0 ? `+${percent}%` : `${percent}%`
     };
+  }
+  function marketAdvice(recipe) {
+    const percent = marketDelta(recipe).percent;
+    if (percent >= 10) return { label: '现在卖', labelEn: 'SELL NOW', color: '#b72820' };
+    if (percent <= -10) return { label: '先囤货', labelEn: 'HOLD', color: '#3576a8' };
+    return { label: '可观望', labelEn: 'WAIT', color: '#8a6720' };
   }
   function knownMarketRecipes() {
     return RECIPES.filter(recipe => !!state.save.recipes[recipe.id]).sort((a, b) => {
@@ -3848,9 +3854,9 @@
       return {
         recipe,
         x: fullLast ? margin : margin + (i % 2) * (w + gap),
-        y: 170 + Math.floor(i / 2) * 96,
+        y: 122 + Math.floor(i / 2) * 82,
         w: fullLast ? l.w - margin * 2 : w,
-        h: 88
+        h: 74
       };
     });
   }
@@ -3858,56 +3864,28 @@
   function kitchenMarketLockedRect() {
     const l = state.layout;
     const rows = Math.ceil(knownMarketRecipes().length / 2);
-    return { x: 16, y: 170 + rows * 96, w: l.w - 32, h: 48 };
+    return { x: 16, y: 122 + rows * 82, w: l.w - 32, h: 42 };
   }
 
   function drawKitchenMarket() {
     const l = state.layout;
     const title = businessTitleInfo();
-    drawKitchenSectionSign(ui('今日料理收购牌', 'Today’s Dish Offers'));
+    drawKitchenSectionSign(ui('今日收购价', 'Today’s Prices'));
     ctx.save();
     ctx.fillStyle = '#4b3022';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 11px system-ui, sans-serif';
-    ctx.fillText(ui(`${title.current.name} · 累计收入 ${title.revenue}`, `${title.current.nameEn} · Revenue ${title.revenue}`), l.w / 2, 86, l.w - 34);
-    ctx.font = '700 9.5px system-ui, sans-serif';
+    ctx.font = '900 10px system-ui, sans-serif';
     const progress = title.next
-      ? ui(`再赚 ${title.next.revenue - title.revenue} 铜钱升级为「${title.next.name}」`, `Earn ${title.next.revenue - title.revenue} more for ${title.next.nameEn}`)
-      : ui('已达到最高称号「星级大酒店」', 'Highest title reached: Star Hotel');
-    ctx.fillText(progress, l.w / 2, 103, l.w - 34);
+      ? ui(`${title.current.name} · 收入 ${title.revenue} · 距升级 ${title.next.revenue - title.revenue}`, `${title.current.nameEn} · ${title.revenue} · ${title.next.revenue - title.revenue} to level up`)
+      : ui(`${title.current.name} · 收入 ${title.revenue} · 最高称号`, `${title.current.nameEn} · ${title.revenue} · MAX`);
+    ctx.fillText(progress, l.w / 2, 86, l.w - 34);
+    ctx.fillStyle = '#786250';
+    ctx.font = '700 8.5px system-ui, sans-serif';
+    ctx.fillText(ui('价格每天00:00更新', 'Prices update daily at 00:00'), l.w / 2, 105, l.w - 34);
     ctx.restore();
-    drawKitchenMarketLegend();
     kitchenMarketCardRects().forEach(r => drawKitchenMarketCard(r));
     if (knownMarketRecipes().length < RECIPES.length) drawKitchenMarketLockedSummary();
-  }
-
-  function drawKitchenMarketLegend() {
-    const l = state.layout;
-    const r = { x: 15, y: 116, w: l.w - 30, h: 42 };
-    ctx.save();
-    ctx.fillStyle = '#263d38';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2.5;
-    roundRect(r.x, r.y, r.w, r.h, 6, true, true, 2.5);
-    const items = [
-      { arrow: '↑', label: ui('高价·适合卖', 'HIGH · SELL'), color: '#ff7b5c' },
-      { arrow: '→', label: ui('平价·看库存', 'EVEN · CHOOSE'), color: '#f1d06b' },
-      { arrow: '↓', label: ui('低价·先囤货', 'LOW · HOLD'), color: '#79c9f1' }
-    ];
-    const itemW = r.w / 3;
-    items.forEach((item, i) => {
-      const cx = r.x + itemW * (i + 0.5);
-      ctx.fillStyle = item.color;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = '900 16px system-ui, sans-serif';
-      ctx.fillText(item.arrow, cx, r.y + 14);
-      ctx.fillStyle = '#fff4cf';
-      ctx.font = '800 8px system-ui, sans-serif';
-      ctx.fillText(item.label, cx, r.y + 30, itemW - 6);
-    });
-    ctx.restore();
   }
 
   function drawKitchenSectionSign(label) {
@@ -3931,17 +3909,15 @@
 
   function drawKitchenMarketCard(r) {
     const stock = Math.max(0, Number(state.save.dishInventory[r.recipe.id] || 0));
-    const trend = marketTrend(r.recipe);
-    const delta = marketDelta(r.recipe);
+    const advice = marketAdvice(r.recipe);
     const price = dailyDishPrice(r.recipe);
-    const bonus = !!state.save.firstSaleBonuses[r.recipe.id];
     drawPressTransform(r, `market-${r.recipe.id}`, () => {
       ctx.save();
       ctx.fillStyle = stock > 0 ? '#fff4c9' : '#eee5cf';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 3;
       roundRect(r.x, r.y, r.w, r.h, 7, true, true, 3);
-      ctx.fillStyle = trend.color;
+      ctx.fillStyle = advice.color;
       ctx.fillRect(r.x, r.y + 6, 7, r.h - 12);
       ctx.fillStyle = '#b72820';
       ctx.beginPath();
@@ -3952,7 +3928,7 @@
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.font = '900 9.5px system-ui, sans-serif';
-      ctx.fillText(isEn() ? r.recipe.nameEn : r.recipe.name, r.x + 13, r.y + 15, r.w - 64);
+      ctx.fillText(isEn() ? r.recipe.nameEn : r.recipe.name, r.x + 13, r.y + 15, r.w - 59);
       ctx.fillStyle = '#fffdf6';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 1.8;
@@ -3964,34 +3940,32 @@
 
       ctx.textAlign = 'left';
       ctx.fillStyle = '#111';
-      ctx.font = `900 ${r.w > 220 ? 23 : 20}px ui-monospace, monospace`;
+      ctx.font = `900 ${r.w > 220 ? 24 : 21}px ui-monospace, monospace`;
       const priceText = `${price}`;
       const priceWidth = ctx.measureText(priceText).width;
-      ctx.fillText(priceText, r.x + 14, r.y + 45);
+      ctx.fillText(priceText, r.x + 14, r.y + 42);
       ctx.font = '800 8px system-ui, sans-serif';
-      ctx.fillText(ui('铜钱/份', 'COINS'), r.x + 15 + priceWidth, r.y + 48);
+      ctx.fillText(ui('铜钱/份', 'COINS'), r.x + 15 + priceWidth, r.y + 45);
 
-      ctx.fillStyle = trend.color;
-      ctx.textAlign = 'right';
-      ctx.font = '900 13px system-ui, sans-serif';
-      ctx.fillText(`${delta.arrow} ${isEn() ? trend.nameEn : trend.name}`, r.x + r.w - 12, r.y + 42, r.w * 0.46);
-      ctx.font = '800 9px system-ui, sans-serif';
-      ctx.fillText(ui(`较原价 ${delta.text}`, `${delta.text} vs base`), r.x + r.w - 12, r.y + 57, r.w * 0.48);
+      const adviceRect = { x: r.x + r.w - 76, y: r.y + 29, w: 64, h: 20 };
+      ctx.fillStyle = advice.color;
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 1.6;
+      roundRect(adviceRect.x, adviceRect.y, adviceRect.w, adviceRect.h, 10, true, true, 1.6);
+      ctx.fillStyle = '#fff7df';
+      ctx.textAlign = 'center';
+      ctx.font = '900 9px system-ui, sans-serif';
+      ctx.fillText(isEn() ? advice.labelEn : advice.label, adviceRect.x + adviceRect.w / 2, adviceRect.y + adviceRect.h / 2);
 
-      const sell = { x: r.x + r.w - 84, y: r.y + 64, w: 72, h: 19 };
+      const sell = { x: r.x + 12, y: r.y + 53, w: r.w - 24, h: 16 };
       ctx.fillStyle = stock > 0 ? '#b72820' : '#aaa49a';
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 1.8;
       roundRect(sell.x, sell.y, sell.w, sell.h, 4, true, true, 1.8);
       ctx.fillStyle = stock > 0 ? '#fff7df' : '#4e4b47';
       ctx.textAlign = 'center';
-      ctx.font = '900 8.5px system-ui, sans-serif';
+      ctx.font = '900 8px system-ui, sans-serif';
       ctx.fillText(stock > 0 ? ui('卖出 1 份', 'SELL 1') : ui('暂无库存', 'NO STOCK'), sell.x + sell.w / 2, sell.y + sell.h / 2);
-
-      ctx.fillStyle = '#5d5548';
-      ctx.textAlign = 'left';
-      ctx.font = '800 8px system-ui, sans-serif';
-      ctx.fillText(bonus ? ui('首售额外 +60', 'First sale +60') : ui('每日00:00换价', 'New price at 00:00'), r.x + 14, r.y + 74, r.w - 104);
       ctx.restore();
     });
   }
@@ -4006,20 +3980,18 @@
     roundRect(r.x, r.y, r.w, r.h, 6, true, true, 2.5);
     ctx.fillStyle = '#f0c96c';
     ctx.beginPath();
-    ctx.arc(r.x + 27, r.y + r.h / 2, 14, 0, Math.PI * 2);
+    ctx.arc(r.x + 25, r.y + r.h / 2, 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#111';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 14px system-ui, sans-serif';
-    ctx.fillText('?', r.x + 27, r.y + r.h / 2);
+    ctx.font = '900 13px system-ui, sans-serif';
+    ctx.fillText('?', r.x + 25, r.y + r.h / 2);
     ctx.fillStyle = '#fff4cf';
     ctx.textAlign = 'left';
-    ctx.font = '900 10px system-ui, sans-serif';
-    ctx.fillText(ui(`还有 ${locked} 道料理等待发现`, `${locked} dishes still undiscovered`), r.x + 51, r.y + 17, r.w - 62);
-    ctx.font = '700 8.5px system-ui, sans-serif';
-    ctx.fillText(ui('去灶台自由组合食材，发现后才会进入行情牌', 'Experiment at the stove to reveal their prices'), r.x + 51, r.y + 33, r.w - 62);
+    ctx.font = '900 9.5px system-ui, sans-serif';
+    ctx.fillText(ui(`还有 ${locked} 道未发现 · 去灶台试试`, `${locked} undiscovered · Try the stove`), r.x + 45, r.y + r.h / 2, r.w - 56);
     ctx.restore();
   }
 
@@ -4869,12 +4841,12 @@
       ctx.textBaseline = 'middle';
       ctx.font = '900 11px system-ui, sans-serif';
       const headline = dish ? ui('端去清理', 'CLEAR PLATE')
-        : opportunity ? ui(`${marketDelta(opportunity).arrow}${marketTrend(opportunity).name} · ${opportunity.name}`, `${marketDelta(opportunity).arrow}${marketTrend(opportunity).nameEn} · ${opportunity.nameEn}`)
-          : ui('今日收购牌 · 暂无可卖料理', 'TODAY’S MARKET · NOTHING TO SELL');
+        : opportunity ? ui(`${marketAdvice(opportunity).label} · ${opportunity.name}`, `${marketAdvice(opportunity).labelEn} · ${opportunity.nameEn}`)
+          : ui('今日收购价 · 暂无可卖料理', 'TODAY’S PRICES · NOTHING TO SELL');
       ctx.fillText(headline, r.x + r.w / 2, r.y + 25, r.w - 18);
       ctx.font = '700 8.5px system-ui, sans-serif';
       const detail = dish ? ui('黑暗料理不能出售', 'Dark dish cannot sell')
-        : opportunity ? ui(`${dailyDishPrice(opportunity)}铜钱 · 库存×${state.save.dishInventory[opportunity.id]} · 点开卖`, `${dailyDishPrice(opportunity)} coins · ×${state.save.dishInventory[opportunity.id]} · tap to sell`)
+        : opportunity ? ui(`${dailyDishPrice(opportunity)}铜钱 · 库存×${state.save.dishInventory[opportunity.id]} · 点开查看`, `${dailyDishPrice(opportunity)} coins · ×${state.save.dishInventory[opportunity.id]} · tap to view`)
           : ui(`仓库共 ${count} 份 · 点开查看全部价格`, `${count} stored · tap for all prices`);
       ctx.fillText(detail, r.x + r.w / 2, r.y + 38, r.w - 18);
       ctx.restore();
