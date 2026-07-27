@@ -12,11 +12,12 @@ source = source.replace(/\}\)\(\);\s*$/, `
     rewardIngredientDrop, safeReturnHome, gameOver, recipeCount,
     sellPlatedDish, sellStoredDish, discardPlatedDish, useDailyActiveSkill,
     skillCooldownRemaining, ghostEyeCooldownProgress, ghostEyeOpenRatio, generateDailyShopOffers, upgradeKitchenSlots,
-    normalizeSave, sanitizeLoadout, dailyPriceMultiplier, dailyDishPrice, businessTitleInfo, totalDishCount,
+    normalizeSave, sanitizeLoadout, dailyPriceMultiplier, dailyDishPrice, marketDelta, knownMarketRecipes, bestMarketOpportunity, businessTitleInfo, totalDishCount,
     hasCarriedSkill, openRunPreparation, openSkillShop,
     startCorridorAdvance, finishCorridorAdvance, handleSealClick,
     handleBossSealClick, finishKitchenDrag, activeSkillButtonRect, carriedActiveSkill, runSkillButtonRects,
-    kitchenIngredientRects, kitchenStoveRect, kitchenDishRect, kitchenDishActionRect, kitchenPrepareRect, resize, draw
+    kitchenIngredientRects, kitchenStoveRect, kitchenDishRect, kitchenDishActionRect, kitchenPrepareRect,
+    kitchenMarketCardRects, kitchenMarketLockedRect, resize, draw
   };
 })();`);
 
@@ -107,11 +108,13 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.22.0_immersive_kitchen');
+assert.equal(api.VERSION, 'v0.22.1_clear_market_board');
 assert.match(source, /function drawFutureOrbGlyph\(/, 'Foresight uses its own future-orb glyph');
 assert.match(source, /function drawKitchenRoomBackground\(/, 'kitchen has a dedicated room scene');
 assert.match(source, /function drawKitchenPantryShelf\(/, 'ingredients are integrated into a pantry shelf');
 assert.match(source, /function drawKitchenHangingMenu\(/, 'dish market is integrated into a hanging menu');
+assert.match(source, /function drawKitchenMarketLegend\(/, 'market explains sell, choose, and hold states');
+assert.match(source, /function drawKitchenMarketLockedSummary\(/, 'undiscovered dishes are summarized instead of repeated');
 assert.equal(api.INGREDIENTS.length, 4);
 assert.equal(api.RECIPES.length, 7);
 assert.equal(api.TEST_PANTRY_STOCK, 99);
@@ -168,6 +171,11 @@ assert.equal(api.state.save.recipes.tomato_egg, true, 'finished production unloc
 assert.equal(api.state.save.coins, 0, 'cooking no longer auto-sells');
 assert.equal(api.state.save.dishInventory.tomato_egg, 1, 'cooked dish enters persistent dish inventory');
 assert.equal(api.state.save.firstSaleBonuses.tomato_egg, true, 'new recipe keeps its first-sale bonus');
+assert.deepEqual(Array.from(api.knownMarketRecipes().map(recipe => recipe.id)), ['tomato_egg'], 'market lists discovered dishes only');
+assert.equal(api.bestMarketOpportunity().id, 'tomato_egg', 'hanging menu promotes an in-stock dish');
+assert.equal(api.kitchenMarketCardRects().length, 1, 'locked recipes do not create repetitive market cards');
+assert.ok(api.kitchenMarketCardRects()[0].w > api.state.layout.w * 0.8, 'a lone known dish uses a full-width market ticket');
+assert.ok(api.kitchenMarketLockedRect().y > api.kitchenMarketCardRects()[0].y, 'undiscovered summary follows known dish prices');
 assert.equal(api.state.save.pantry.tomato, 0);
 assert.equal(api.state.save.pantry.egg, 0);
 const tomatoEgg = api.RECIPES.find(recipe => recipe.id === 'tomato_egg');
@@ -177,6 +185,7 @@ assert.ok(api.dailyPriceMultiplier(tomatoEgg) >= 0.75 && api.dailyPriceMultiplie
 api.sellStoredDish('tomato_egg');
 assert.equal(api.state.save.coins, todayTomatoEggPrice + 60, 'separate sale uses today’s price and discovery bonus');
 assert.equal(api.state.save.dishInventory.tomato_egg, 0);
+assert.equal(api.bestMarketOpportunity(), null, 'hanging menu reports no sale opportunity when stock is empty');
 assert.equal(api.state.save.lifetimeRevenue, todayTomatoEggPrice + 60, 'sales accumulate permanent business revenue');
 const coinsAfterFirstSale = api.state.save.coins;
 
@@ -347,7 +356,16 @@ assert.ok(api.kitchenIngredientRects().every(r => r.y < api.kitchenStoveRect().y
 assert.ok(api.kitchenDishRect().y > api.kitchenStoveRect().y, 'serving hatch stays below the stove');
 assert.ok(api.kitchenPrepareRect().y + api.kitchenPrepareRect().h <= api.state.layout.h, 'kitchen exit door remains on screen');
 assert.ok(api.kitchenDishActionRect().y + api.kitchenDishActionRect().h < api.kitchenPrepareRect().y, 'hanging menu does not overlap the kitchen exit');
+const knownRecipesBeforeEmptyMarket = api.state.save.recipes;
+const dishInventoryBeforeEmptyMarket = api.state.save.dishInventory;
+api.state.save.recipes = {};
+api.state.save.dishInventory = {};
+assert.equal(api.kitchenMarketCardRects().length, 0, 'a brand-new kitchen does not show repeated locked market cards');
+assert.equal(api.kitchenMarketLockedRect().y, 170, 'undiscovered summary starts directly below the market legend');
 api.state.kitchenView = 'market';
+api.draw();
+api.state.save.recipes = knownRecipesBeforeEmptyMarket;
+api.state.save.dishInventory = dishInventoryBeforeEmptyMarket;
 api.draw();
 api.state.kitchenView = 'chefs';
 api.draw();
