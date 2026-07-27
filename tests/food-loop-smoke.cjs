@@ -12,7 +12,7 @@ source = source.replace(/\}\)\(\);\s*$/, `
     rewardIngredientDrop, safeReturnHome, gameOver, recipeCount,
     sellPlatedDish, sellStoredDish, discardPlatedDish, useDailyActiveSkill,
     skillCooldownRemaining, ghostEyeCooldownProgress, ghostEyeOpenRatio, generateDailyShopOffers, upgradeKitchenSlots,
-    normalizeSave, sanitizeLoadout, dailyPriceMultiplier, dailyDishPrice, marketDelta, knownMarketRecipes, bestMarketOpportunity, businessTitleInfo, totalDishCount,
+    normalizeSave, sanitizeLoadout, dailyPriceMultiplier, dailyDishPrice, marketDelta, marketAdvice, knownMarketRecipes, bestMarketOpportunity, businessTitleInfo, totalDishCount,
     hasCarriedSkill, openRunPreparation, openSkillShop,
     startCorridorAdvance, finishCorridorAdvance, handleSealClick,
     handleBossSealClick, finishKitchenDrag, activeSkillButtonRect, carriedActiveSkill, runSkillButtonRects,
@@ -108,12 +108,12 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.22.1_clear_market_board');
+assert.equal(api.VERSION, 'v0.22.2_simple_market_board');
 assert.match(source, /function drawFutureOrbGlyph\(/, 'Foresight uses its own future-orb glyph');
 assert.match(source, /function drawKitchenRoomBackground\(/, 'kitchen has a dedicated room scene');
 assert.match(source, /function drawKitchenPantryShelf\(/, 'ingredients are integrated into a pantry shelf');
 assert.match(source, /function drawKitchenHangingMenu\(/, 'dish market is integrated into a hanging menu');
-assert.match(source, /function drawKitchenMarketLegend\(/, 'market explains sell, choose, and hold states');
+assert.doesNotMatch(source, /function drawKitchenMarketLegend\(/, 'market no longer needs a separate strategy legend');
 assert.match(source, /function drawKitchenMarketLockedSummary\(/, 'undiscovered dishes are summarized instead of repeated');
 assert.equal(api.INGREDIENTS.length, 4);
 assert.equal(api.RECIPES.length, 7);
@@ -173,8 +173,10 @@ assert.equal(api.state.save.dishInventory.tomato_egg, 1, 'cooked dish enters per
 assert.equal(api.state.save.firstSaleBonuses.tomato_egg, true, 'new recipe keeps its first-sale bonus');
 assert.deepEqual(Array.from(api.knownMarketRecipes().map(recipe => recipe.id)), ['tomato_egg'], 'market lists discovered dishes only');
 assert.equal(api.bestMarketOpportunity().id, 'tomato_egg', 'hanging menu promotes an in-stock dish');
+assert.ok(['现在卖', '可观望', '先囤货'].includes(api.marketAdvice(api.bestMarketOpportunity()).label), 'market gives one plain action suggestion');
 assert.equal(api.kitchenMarketCardRects().length, 1, 'locked recipes do not create repetitive market cards');
 assert.ok(api.kitchenMarketCardRects()[0].w > api.state.layout.w * 0.8, 'a lone known dish uses a full-width market ticket');
+assert.equal(api.kitchenMarketCardRects()[0].h, 74, 'simplified market cards stay compact');
 assert.ok(api.kitchenMarketLockedRect().y > api.kitchenMarketCardRects()[0].y, 'undiscovered summary follows known dish prices');
 assert.equal(api.state.save.pantry.tomato, 0);
 assert.equal(api.state.save.pantry.egg, 0);
@@ -361,7 +363,7 @@ const dishInventoryBeforeEmptyMarket = api.state.save.dishInventory;
 api.state.save.recipes = {};
 api.state.save.dishInventory = {};
 assert.equal(api.kitchenMarketCardRects().length, 0, 'a brand-new kitchen does not show repeated locked market cards');
-assert.equal(api.kitchenMarketLockedRect().y, 170, 'undiscovered summary starts directly below the market legend');
+assert.equal(api.kitchenMarketLockedRect().y, 122, 'undiscovered summary starts directly below the compact market heading');
 api.state.kitchenView = 'market';
 api.draw();
 api.state.save.recipes = knownRecipesBeforeEmptyMarket;
