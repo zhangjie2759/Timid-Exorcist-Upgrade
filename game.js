@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.22.2_simple_market_board';
+  const VERSION = 'v0.23.0_clean3d_theme_bridge';
   const TEST_PANTRY_STOCK = 99;
   const LOADOUT_LIMITS = { active: 1, support: 2 };
   const BUSINESS_TITLES = [
@@ -14,6 +14,12 @@
   ];
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
+  const ART_THEME = window.GAME_ART_THEME || {};
+  const THEME = Object.assign({
+    canvas: '#f8f1e8', surface: '#fffaf3', surfaceStrong: '#f2e2cf', ink: '#263650', inkMuted: '#6f7785',
+    navy: '#2f4f7f', navyDeep: '#192c4d', coral: '#ef725f', coralDeep: '#cf5849', mint: '#72c7be',
+    mintDeep: '#4ea69e', purple: '#9a7ad2', yellow: '#f3c45b', line: '#d8c7b5', shadow: 'rgba(44,54,76,0.18)', white: '#fffdf9'
+  }, ART_THEME.tokens || {});
 
   const DPR_MAX = 2;
   const STORAGE_KEY = 'next_room_corridor_v0121_save';
@@ -651,13 +657,59 @@
   }
 
   function preloadFilesList() {
+    const themeFiles = [
+      ...Object.values(ART_THEME.chefs || {}),
+      ...Object.values(ART_THEME.foodMonsters || {})
+    ].filter(Boolean);
     return Array.from(new Set([
       ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.seal, ROOM_ASSETS.talisman,
       ...GHOST_FIRE_FILES,
       ...GHOSTS.map(g => g.file),
       ...GHOSTS.map(g => g.sealFile).filter(Boolean),
-      ...PEOPLE.map(p => p.file)
+      ...PEOPLE.map(p => p.file),
+      ...themeFiles
     ]));
+  }
+
+  function themeChefFile(role) {
+    return ART_THEME.chefs && ART_THEME.chefs[role] ? ART_THEME.chefs[role] : '';
+  }
+
+  function themeFoodFile(id) {
+    return ART_THEME.foodMonsters && ART_THEME.foodMonsters[id] ? ART_THEME.foodMonsters[id] : '';
+  }
+
+  function drawThemeSprite(file, box, options = {}) {
+    if (!file) return false;
+    const img = getAssetImage(file);
+    if (!img) return false;
+    const scale = options.scale || 1;
+    const pad = options.pad || 0;
+    const x = box.x + pad;
+    const y = box.y + pad;
+    const w = Math.max(1, box.w - pad * 2);
+    const h = Math.max(1, box.h - pad * 2);
+    const ar = img.naturalWidth / img.naturalHeight;
+    let dw = w;
+    let dh = dw / ar;
+    if (dh > h) {
+      dh = h;
+      dw = dh * ar;
+    }
+    dw *= scale;
+    dh *= scale;
+    const dx = x + (w - dw) / 2 + (options.offsetX || 0) * w;
+    const dy = y + (h - dh) / 2 + (options.offsetY || 0) * h;
+    ctx.save();
+    if (options.alpha != null) ctx.globalAlpha *= options.alpha;
+    if (options.shadow !== false) {
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = Math.max(5, Math.min(18, box.w * 0.08));
+      ctx.shadowOffsetY = Math.max(2, box.h * 0.018);
+    }
+    ctx.drawImage(img, dx, dy, dw, dh);
+    ctx.restore();
+    return true;
   }
 
   function preloadAll() {
@@ -1863,15 +1915,16 @@
 
   function menuButtons() {
     const l = state.layout;
-    const bw = Math.min(286, l.w * 0.72);
-    const bh = 58;
-    const x = (l.w - bw) / 2;
-    const y = Math.max(l.h * 0.47, l.h * 0.17 + 238);
+    const margin = 20;
+    const gap = 12;
+    const bw = (l.w - margin * 2 - gap) / 2;
+    const bh = l.h < 700 ? 70 : 76;
+    const y = l.h - (bh * 2 + gap + 22);
     return {
-      start: { x, y, w: bw, h: bh },
-      rules: { x, y: y + 70, w: bw, h: bh },
-      pets: { x, y: y + 140, w: bw, h: bh },
-      gallery: { x, y: y + 210, w: bw, h: bh },
+      start: { x: margin, y, w: bw, h: bh },
+      pets: { x: margin + bw + gap, y, w: bw, h: bh },
+      gallery: { x: margin, y: y + bh + gap, w: bw, h: bh },
+      rules: { x: margin + bw + gap, y: y + bh + gap, w: bw, h: bh },
       lang: { x: l.w - 82, y: 18, w: 64, h: 36 }
     };
   }
@@ -2248,52 +2301,77 @@
   function drawMenu() {
     const l = state.layout;
     drawMenuBackground();
-
-    const titleW = Math.min(318, l.w * 0.74);
-    const titleH = 126;
-    const titleX = (l.w - titleW) / 2;
-    const titleY = Math.max(112, l.h * 0.155);
+    const b = menuButtons();
+    drawMenuDoorScene({ x: 28, y: 72, w: l.w - 56, h: Math.max(248, b.start.y - 88) });
 
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-
-    ctx.fillStyle = 'rgba(255,253,246,0.94)';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 5;
-    roundRect(titleX, titleY, titleW, titleH, 24, true, true, 5);
-
-    ctx.fillStyle = '#111';
-    ctx.font = isEn() ? '900 28px system-ui, sans-serif' : '900 38px system-ui, sans-serif';
-    ctx.fillText(isEn() ? 'TIMID EXORCIST' : '胆小除魔师', l.w / 2, titleY + 54);
-
-    ctx.font = isEn() ? '800 12px system-ui, sans-serif' : '800 14px system-ui, sans-serif';
-    ctx.fillText(isEn() ? 'Endless corridor · Open and decide' : '无限长廊 · 开门识别异常', l.w / 2, titleY + 90);
-
-    // 版本号放在标题框外，避免和副标题/边框打架。
-    ctx.font = '800 11px system-ui, sans-serif';
-    ctx.fillText(VERSION, l.w / 2, titleY + titleH + 34);
+    ctx.fillStyle = THEME.ink;
+    ctx.font = isEn() ? '900 23px system-ui, sans-serif' : '900 28px system-ui, sans-serif';
+    ctx.fillText(isEn() ? 'TIMID EXORCIST' : '胆小除魔师', l.w / 2, 93);
+    ctx.font = '800 9px system-ui, sans-serif';
+    ctx.fillStyle = THEME.inkMuted;
+    const title = businessTitleInfo().current;
+    ctx.fillText(ui(`${title.name} · 铜钱 ${state.save.coins || 0} · ${VERSION}`, `${title.nameEn} · ${state.save.coins || 0} coins · ${VERSION}`), l.w / 2, 116, l.w - 76);
     ctx.restore();
 
-    const b = menuButtons();
     drawMiniButton(b.lang, isEn() ? '中' : 'EN', 'lang');
-    drawUIButton(b.start, isEn() ? 'Start' : '开始游戏', '', 'start');
-    drawUIButton(b.rules, isEn() ? 'Rules' : '游戏规则', '', 'rules');
+    drawUIButton(b.start, isEn() ? 'Start' : '开始', ui('准备巡夜', 'Prepare patrol'), 'start');
     drawPetUnlockPulse(b.pets);
-    drawUIButton(b.pets, isEn() ? 'Kitchen' : '厨房', kitchenMenuSub(), 'pets');
-    drawUIButton(b.gallery, isEn() ? `Archive ${collectCountText()}` : `图鉴 ${collectCountText()}`, '', 'gallery');
+    drawUIButton(b.pets, isEn() ? 'Kitchen' : '厨房', ui(`${totalDishCount()}份料理`, `${totalDishCount()} dishes`), 'pets');
+    drawUIButton(b.gallery, isEn() ? 'Archive' : '图鉴', collectCountText(), 'gallery');
+    drawUIButton(b.rules, isEn() ? 'Rules' : '规则', ui('开门与封印', 'Door & seal'), 'rules');
+  }
 
+  function drawMenuDoorScene(r) {
+    const compact = state.layout.h < 700;
+    const doorW = Math.min(216, r.w * 0.60);
+    const doorH = Math.min(compact ? 270 : 340, r.h - 48);
+    const doorX = r.x + (r.w - doorW) / 2;
+    const doorY = r.y + 62;
+    ctx.save();
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = 22;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = THEME.navy;
+    roundRect(doorX - 14, doorY - 14, doorW + 28, doorH + 20, doorW * 0.48, true, false, 0);
+    ctx.shadowColor = 'transparent';
+    const night = ctx.createLinearGradient(0, doorY, 0, doorY + doorH);
+    night.addColorStop(0, '#0b1831');
+    night.addColorStop(1, '#17294a');
+    ctx.fillStyle = night;
+    roundRect(doorX, doorY, doorW, doorH, doorW * 0.44, true, false, 0);
+    for (let i = 0; i < 18; i++) {
+      const sx = doorX + 18 + ((i * 47) % Math.max(28, doorW - 36));
+      const sy = doorY + 34 + ((i * 73) % Math.max(30, doorH - 72));
+      ctx.globalAlpha = 0.35 + (i % 3) * 0.2;
+      ctx.fillStyle = i % 4 === 0 ? THEME.mint : THEME.white;
+      ctx.beginPath();
+      ctx.arc(sx, sy, i % 5 === 0 ? 1.6 : 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    const tomato = themeFoodFile('tomato');
+    drawThemeSprite(tomato, { x: doorX + doorW * 0.11, y: doorY + doorH * 0.33, w: doorW * 0.58, h: doorH * 0.62 }, { scale: 1.12, offsetX: -0.08, shadow: false });
+    drawThemeSprite(themeChefFile('head'), { x: doorX + doorW * 0.55, y: doorY + doorH * 0.38, w: doorW * 0.62, h: doorH * 0.65 }, { scale: 1.03, offsetX: 0.08 });
   }
 
   function drawPrepare() {
     const l = state.layout;
     drawMenuBackground();
     ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 5;
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 5;
+    ctx.fillStyle = THEME.surface;
+    ctx.strokeStyle = THEME.line;
+    ctx.lineWidth = 2;
     roundRect(20, 78, l.w - 40, 90, 22, true, true, 5);
-    ctx.fillStyle = '#111';
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = THEME.ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 30px system-ui, sans-serif';
@@ -2301,6 +2379,7 @@
     ctx.font = '700 12px system-ui, sans-serif';
     ctx.fillText(ui('主动 1 格 · 被动/触发 2 格', '1 active · 2 passive/trigger'), l.w / 2, 145);
     ctx.restore();
+    drawThemeSprite(themeChefFile('prep'), { x: 21, y: 78, w: 88, h: 92 }, { scale: 1.06, shadow: false });
 
     const rects = prepareSkillRects();
     if (!rects.length) {
@@ -2347,11 +2426,15 @@
   function drawPrepareSkillCard(r) {
     const selected = state.runLoadout.includes(r.skill.id);
     drawPressTransform(r, `prepare-${r.skill.id}`, () => {
-      ctx.fillStyle = selected ? '#111' : '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 4;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 3;
+      ctx.fillStyle = selected ? (r.group === 'active' ? THEME.purple : THEME.mint) : THEME.surface;
+      ctx.strokeStyle = selected ? (r.group === 'active' ? '#7459ad' : THEME.mintDeep) : THEME.line;
+      ctx.lineWidth = 2;
       roundRect(r.x, r.y, r.w, r.h, 16, true, true, 4);
-      ctx.fillStyle = selected ? '#fffdf6' : '#111';
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = selected ? THEME.white : THEME.ink;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.font = '900 14px system-ui, sans-serif';
@@ -2367,14 +2450,15 @@
 
   function drawMenuBackground() {
     const l = state.layout;
-
-    // 首页彻底去掉背景图：纯白背景 + 鬼火。
     ctx.save();
-    ctx.fillStyle = '#ffffff';
+    const bg = ctx.createLinearGradient(0, 0, 0, l.h);
+    bg.addColorStop(0, THEME.white);
+    bg.addColorStop(1, THEME.canvas);
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, l.w, l.h);
+    ctx.fillStyle = 'rgba(216,199,181,0.18)';
+    for (let y = 58; y < l.h; y += 54) ctx.fillRect(0, y, l.w, 1);
     ctx.restore();
-
-    drawMenuGhostFires();
   }
 
   function drawMenuGhostFires() {
@@ -3064,10 +3148,10 @@
     const prog = currentStageProgress();
 
     ctx.save();
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = THEME.navyDeep;
     ctx.fillRect(0, 0, l.w, l.topH);
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = THEME.navy;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(0, l.topH - 2);
     ctx.lineTo(l.w, l.topH - 2);
@@ -3079,7 +3163,7 @@
     const textX = l.home.x + l.home.w + 12;
     const textMax = Math.max(96, l.galleryButton.x - textX - 10);
 
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = THEME.white;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
@@ -3099,16 +3183,16 @@
     const barX = 16;
     const barY = l.topH - 16;
     const barW = Math.max(80, l.w - 32);
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#111';
+    ctx.fillStyle = 'rgba(255,255,255,0.20)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.42)';
     ctx.lineWidth = 2;
     roundRect(barX, barY, barW, 7, 4, true, true, 2);
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = THEME.mint;
     roundRect(barX + 2, barY + 2, Math.max(0, (barW - 4) * prog.ratio), 3, 2, true, false, 0);
 
     ctx.textAlign = 'right';
     ctx.font = '700 10px system-ui, sans-serif';
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = THEME.white;
     ctx.fillText(collectCountText(), l.w - 10, 65);
     if (state.testMode) {
       ctx.font = '900 10px system-ui, sans-serif';
@@ -3169,11 +3253,11 @@
       freshSeal: ui(`封鲜符 ×${state.freshSeals}`, `Fresh ×${state.freshSeals}`)
     };
     drawPressTransform(r, `runSkill-${r.id}`, () => {
-      ctx.fillStyle = active ? '#b72820' : '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
+      ctx.fillStyle = active ? THEME.coral : THEME.surface;
+      ctx.strokeStyle = active ? THEME.coralDeep : THEME.line;
+      ctx.lineWidth = 2;
       roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
-      ctx.fillStyle = active ? '#fffdf6' : '#111';
+      ctx.fillStyle = active ? THEME.white : THEME.ink;
       ctx.font = `${r.w < 100 ? 11 : 12}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -3225,7 +3309,7 @@
       ctx.restore();
     });
     ctx.save();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = THEME.ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 9px system-ui, sans-serif';
@@ -3339,7 +3423,7 @@
       }
     });
     ctx.save();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = THEME.ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 8.5px system-ui, sans-serif';
@@ -3407,13 +3491,17 @@
   function drawSealButton(r) {
     const img = getAssetImage(ROOM_ASSETS.seal);
     drawPressTransform(r, 'seal', () => {
-      if (img) drawContainImage(img, r.x, r.y, r.w, r.h);
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetY = 5;
+      ctx.fillStyle = THEME.coral;
+      ctx.strokeStyle = THEME.coralDeep;
+      ctx.lineWidth = 3;
+      roundRect(r.x, r.y, r.w, r.h, 24, true, true, 3);
+      ctx.shadowColor = 'transparent';
+      if (img) drawContainImage(img, r.x + 22, r.y + 8, r.w - 44, r.h - 16);
       else {
-        ctx.fillStyle = '#fff06d';
-        ctx.strokeStyle = '#111';
-        ctx.lineWidth = 4;
-        roundRect(r.x, r.y, r.w, r.h, 15, true, true, 4);
-        ctx.fillStyle = '#111';
+        ctx.fillStyle = THEME.white;
         ctx.font = '900 25px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -3727,14 +3815,14 @@
     const v = kitchenVerticalLayout();
     const floorY = Math.min(l.h - 112, v.dishY + v.dishH + 54);
     ctx.save();
-    ctx.fillStyle = '#f4dfb7';
+    ctx.fillStyle = THEME.canvas;
     ctx.fillRect(0, 0, l.w, l.h);
 
-    ctx.fillStyle = '#4c2d20';
+    ctx.fillStyle = THEME.navyDeep;
     ctx.fillRect(0, 0, l.w, 76);
-    ctx.fillStyle = '#6f422b';
+    ctx.fillStyle = THEME.navy;
     ctx.fillRect(0, 68, l.w, 10);
-    ctx.strokeStyle = 'rgba(35,20,14,0.34)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.lineWidth = 1.5;
     for (let x = -24; x < l.w + 40; x += 58) {
       ctx.beginPath();
@@ -3743,9 +3831,9 @@
       ctx.stroke();
     }
 
-    ctx.fillStyle = '#fff0cf';
+    ctx.fillStyle = THEME.surface;
     ctx.fillRect(0, 76, l.w, floorY - 76);
-    ctx.strokeStyle = 'rgba(109,79,54,0.17)';
+    ctx.strokeStyle = 'rgba(47,79,127,0.10)';
     ctx.lineWidth = 1;
     for (let y = 76; y < floorY; y += 30) {
       ctx.beginPath();
@@ -3760,9 +3848,9 @@
       ctx.stroke();
     }
 
-    ctx.fillStyle = '#b46b3b';
+    ctx.fillStyle = THEME.surfaceStrong;
     ctx.fillRect(0, floorY, l.w, l.h - floorY);
-    ctx.strokeStyle = 'rgba(62,34,22,0.26)';
+    ctx.strokeStyle = 'rgba(47,79,127,0.13)';
     ctx.lineWidth = 2;
     for (let y = floorY + 22; y < l.h; y += 28) {
       ctx.beginPath();
@@ -3778,8 +3866,8 @@
     }
 
     if (state.kitchenView === 'cook') {
-      ctx.fillStyle = '#f1cc67';
-      ctx.strokeStyle = '#111';
+      ctx.fillStyle = THEME.yellow;
+      ctx.strokeStyle = THEME.navy;
       ctx.lineWidth = 2;
       [92, l.w - 92].forEach((x, i) => {
         ctx.beginPath();
@@ -3802,20 +3890,20 @@
     const l = state.layout;
     const sign = { x: 144, y: 10, w: l.w - 158, h: 54 };
     ctx.save();
-    ctx.fillStyle = '#9a482d';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
+    ctx.fillStyle = THEME.navy;
+    ctx.strokeStyle = THEME.navyDeep;
+    ctx.lineWidth = 2;
     roundRect(sign.x, sign.y, sign.w, sign.h, 9, true, true, 3);
-    ctx.strokeStyle = '#edc878';
+    ctx.strokeStyle = 'rgba(255,255,255,0.42)';
     ctx.lineWidth = 1.5;
     roundRect(sign.x + 5, sign.y + 5, sign.w - 10, sign.h - 10, 6, false, true, 1.5);
-    ctx.fillStyle = '#fff7df';
+    ctx.fillStyle = THEME.white;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `900 ${l.w < 380 ? 17 : 19}px system-ui, sans-serif`;
     ctx.fillText(ui('百味小厨房', 'Little Flavor Kitchen'), sign.x + sign.w / 2, sign.y + 18, sign.w - 16);
     const title = businessTitleInfo().current;
-    ctx.fillStyle = '#ffe49a';
+    ctx.fillStyle = '#d9f3ee';
     ctx.font = '800 9px system-ui, sans-serif';
     ctx.fillText(ui(`${title.name} · 铜钱${state.save.coins || 0} · 存餐${totalDishCount()}`, `${title.nameEn} · ${state.save.coins || 0}c · ${totalDishCount()} dishes`), sign.x + sign.w / 2, sign.y + 39, sign.w - 12);
     ctx.restore();
@@ -3892,14 +3980,14 @@
     const l = state.layout;
     const r = { x: 144, y: 10, w: l.w - 158, h: 54 };
     ctx.save();
-    ctx.fillStyle = '#9a482d';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
+    ctx.fillStyle = THEME.navy;
+    ctx.strokeStyle = THEME.navyDeep;
+    ctx.lineWidth = 2;
     roundRect(r.x, r.y, r.w, r.h, 9, true, true, 3);
-    ctx.strokeStyle = '#edc878';
+    ctx.strokeStyle = 'rgba(255,255,255,0.42)';
     ctx.lineWidth = 1.5;
     roundRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10, 6, false, true, 1.5);
-    ctx.fillStyle = '#fff7df';
+    ctx.fillStyle = THEME.white;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `900 ${l.w < 380 ? 16 : 18}px system-ui, sans-serif`;
@@ -3983,7 +4071,7 @@
     ctx.arc(r.x + 25, r.y + r.h / 2, 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = THEME.white;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 13px system-ui, sans-serif';
@@ -4022,32 +4110,36 @@
   function drawKitchenWallObject(r, type, label, pressId) {
     drawPressTransform(r, pressId, () => {
       ctx.save();
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 2.5;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 7;
+      ctx.shadowOffsetY = 3;
+      ctx.strokeStyle = THEME.line;
+      ctx.lineWidth = 2;
       if (type === 'chefs') {
-        ctx.fillStyle = '#7a4a2f';
+        ctx.fillStyle = THEME.surfaceStrong;
         roundRect(r.x, r.y, r.w, r.h, 5, true, true, 2.5);
-        ctx.fillStyle = '#fff0cf';
+        ctx.fillStyle = THEME.surface;
         roundRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10, 3, true, true, 1.5);
         drawChefHat(r.x + 20, r.y + 20, 18);
       } else if (type === 'upgrade') {
-        ctx.fillStyle = '#b8c1ba';
+        ctx.fillStyle = '#dfecea';
         roundRect(r.x, r.y + 4, r.w, r.h - 8, 5, true, true, 2.5);
-        ctx.fillStyle = '#5b7167';
+        ctx.fillStyle = THEME.mintDeep;
         ctx.fillRect(r.x + 8, r.y + 12, 22, 17);
         ctx.beginPath();
         ctx.arc(r.x + 19, r.y + 12, 8, Math.PI, 0);
         ctx.stroke();
       } else {
-        ctx.fillStyle = '#a84631';
+        ctx.fillStyle = THEME.coral;
         roundRect(r.x, r.y, r.w, r.h, 5, true, true, 2.5);
-        ctx.fillStyle = '#e5b95e';
+        ctx.fillStyle = THEME.yellow;
         ctx.fillRect(r.x + 8, r.y + 7, 20, 28);
         ctx.strokeRect(r.x + 8, r.y + 7, 20, 28);
-        ctx.fillStyle = '#b72820';
+        ctx.fillStyle = THEME.coralDeep;
         ctx.fillRect(r.x + 15, r.y + 12, 6, 16);
       }
-      ctx.fillStyle = type === 'shop' ? '#fff7df' : '#111';
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = type === 'shop' ? THEME.white : THEME.ink;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 9px system-ui, sans-serif';
@@ -4413,11 +4505,11 @@
   function drawKitchenPantryShelf(v) {
     const l = state.layout;
     ctx.save();
-    ctx.fillStyle = '#8b4c2d';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
+    ctx.fillStyle = THEME.navy;
+    ctx.strokeStyle = THEME.navyDeep;
+    ctx.lineWidth = 2;
     roundRect(8, v.pantryY + 49, l.w - 16, 19, 5, true, true, 3);
-    ctx.fillStyle = '#5f321e';
+    ctx.fillStyle = THEME.navyDeep;
     ctx.fillRect(13, v.pantryY + 66, l.w - 26, 6);
     ctx.strokeRect(13, v.pantryY + 66, l.w - 26, 6);
     [23, l.w - 29].forEach(x => {
@@ -4433,9 +4525,12 @@
     const count = state.save.pantry[r.ingredient.id] || 0;
     drawPressTransform(r, `ingredient-${r.ingredient.id}`, () => {
       ctx.save();
-      ctx.fillStyle = count > 0 ? '#f3d58c' : '#aaa39a';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 2.5;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 3;
+      ctx.fillStyle = count > 0 ? THEME.surfaceStrong : '#d5d1cb';
+      ctx.strokeStyle = count > 0 ? THEME.line : '#aaa39a';
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(r.x + 5, r.y + 28);
       ctx.lineTo(r.x + r.w - 5, r.y + 28);
@@ -4444,25 +4539,26 @@
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = count > 0 ? '#fff4cf' : '#d0cbc4';
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = count > 0 ? THEME.surface : '#d0cbc4';
       ctx.beginPath();
       ctx.ellipse(r.x + r.w / 2, r.y + 29, r.w * 0.38, 10, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      drawIngredientIcon(r.ingredient, r.x + r.w / 2, r.y + 24, 29);
-      ctx.fillStyle = '#111';
+      drawIngredientIcon(r.ingredient, r.x + r.w / 2, r.y + 23, 37);
+      ctx.fillStyle = THEME.ink;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 9px system-ui, sans-serif';
       ctx.fillText(isEn() ? r.ingredient.realEn : r.ingredient.real, r.x + r.w / 2, r.y + 52, r.w - 12);
-      ctx.fillStyle = '#d94b36';
-      ctx.strokeStyle = '#111';
+      ctx.fillStyle = THEME.coral;
+      ctx.strokeStyle = THEME.white;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(r.x + r.w - 9, r.y + 8, 12, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#fff7df';
+      ctx.fillStyle = THEME.white;
       ctx.font = '900 9px system-ui, sans-serif';
       ctx.fillText(`×${count}`, r.x + r.w - 9, r.y + 8);
       ctx.restore();
@@ -4472,6 +4568,8 @@
   function drawIngredientIcon(ingredient, cx, cy, size) {
     if (!ingredient) return;
     const s = size;
+    const themeFile = themeFoodFile(ingredient.id);
+    if (themeFile && drawThemeSprite(themeFile, { x: cx - s * 0.62, y: cy - s * 0.62, w: s * 1.24, h: s * 1.24 }, { scale: 1.08, shadow: false })) return;
     ctx.save();
     ctx.strokeStyle = '#111';
     ctx.lineWidth = Math.max(2, s * 0.08);
@@ -4525,11 +4623,15 @@
   function drawKitchenStove() {
     const stove = kitchenStoveRect();
     ctx.save();
-    ctx.fillStyle = '#8f3f2d';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 4;
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = THEME.navy;
+    ctx.strokeStyle = THEME.navyDeep;
+    ctx.lineWidth = 2;
     roundRect(stove.x, stove.y + 45, stove.w, stove.h - 45, 12, true, true, 4);
-    ctx.fillStyle = '#d7d7cf';
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = '#e6ecec';
     ctx.beginPath();
     ctx.moveTo(stove.x + 96, stove.y + 6);
     ctx.lineTo(stove.x + stove.w - 18, stove.y + 6);
@@ -4538,13 +4640,13 @@
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#52746c';
+    ctx.fillStyle = THEME.mint;
     ctx.fillRect(stove.x + 82, stove.y + 45, stove.w - 98, 68);
     ctx.strokeRect(stove.x + 82, stove.y + 45, stove.w - 98, 68);
-    ctx.fillStyle = '#2f4c47';
+    ctx.fillStyle = THEME.navyDeep;
     ctx.fillRect(stove.x + 82, stove.y + 113, stove.w - 98, stove.h - 113);
     ctx.strokeRect(stove.x + 82, stove.y + 113, stove.w - 98, stove.h - 113);
-    ctx.fillStyle = '#4b3022';
+    ctx.fillStyle = THEME.ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 9px system-ui, sans-serif';
@@ -4652,35 +4754,37 @@
     const pet = PETS.find(item => item.id === preferred && petSave(item.id).met)
       || PETS.find(item => petSave(item.id).met);
     const bounce = state.kitchenCookFx > 0 ? Math.sin(state.t * 22) * 5 : Math.sin(state.t * 2.4) * 1.5;
-    const box = { x: stove.x + 9, y: stove.y + 52 + bounce, w: 68, h: 72 };
+    const box = { x: stove.x + 2, y: stove.y + 37 + bounce, w: 88, h: 102 };
+    const role = state.kitchenMethod === 'steam' ? 'steam' : 'head';
     ctx.save();
-    ctx.fillStyle = '#6a3b24';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
+    ctx.fillStyle = 'rgba(38,54,80,0.16)';
     ctx.beginPath();
-    ctx.ellipse(box.x + box.w / 2, box.y + box.h + 8, 28, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(box.x + box.w / 2, box.y + box.h + 3, 34, 7, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = pet ? pet.tint : '#e9e5da';
-    ctx.beginPath();
-    ctx.arc(box.x + box.w / 2, box.y + box.h / 2, 32, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (pet) {
-      drawPetPortrait(pet, box);
+    const usedTheme = drawThemeSprite(themeChefFile(role), box, { scale: 1.08, offsetY: -0.02 });
+    if (pet && usedTheme) {
       const count = petSave(pet.id).count;
-      ctx.fillStyle = '#fff06d';
+      ctx.fillStyle = THEME.yellow;
+      ctx.strokeStyle = THEME.white;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(box.x + box.w - 5, box.y + 7, 12, 0, Math.PI * 2);
+      ctx.arc(box.x + box.w - 8, box.y + 13, 13, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = THEME.ink;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 9px system-ui, sans-serif';
-      ctx.fillText(`×${count}`, box.x + box.w - 5, box.y + 7);
-    } else {
+      ctx.fillText(`×${count}`, box.x + box.w - 8, box.y + 13);
+    } else if (pet) {
+      ctx.fillStyle = pet.tint;
+      ctx.beginPath();
+      ctx.arc(box.x + box.w / 2, box.y + box.h / 2, 32, 0, Math.PI * 2);
+      ctx.fill();
+      drawPetPortrait(pet, box);
+    } else if (!usedTheme) {
       drawChefHat(box.x + box.w / 2, box.y + 29, 32);
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = THEME.ink;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 20px system-ui, sans-serif';
@@ -4752,7 +4856,7 @@
     ctx.fill();
     ctx.stroke();
     drawIngredientIcon(ingredient, state.kitchenDrag.x - 21, state.kitchenDrag.y, 24);
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = THEME.ink;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.font = '900 10px system-ui, sans-serif';
@@ -4882,11 +4986,15 @@
     drawMenuBackground();
     drawBackButton();
     ctx.save();
-    ctx.fillStyle = '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 4;
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = THEME.surface;
+    ctx.strokeStyle = THEME.line;
+    ctx.lineWidth = 2;
     roundRect(20, 78, l.w - 40, 68, 18, true, true, 4);
-    ctx.fillStyle = '#111';
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = THEME.ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 22px system-ui, sans-serif';
@@ -4898,6 +5006,7 @@
     const owned = state.save.dailySkills.ids.map(dailySkillById).filter(Boolean).map(skill => isEn() ? skill.nameEn : skill.name);
     ctx.fillText(ui(`今日已拥有：${owned.length ? owned.join('、') : '暂无'}`, `Owned today: ${owned.length ? owned.join(', ') : 'None'}`), l.w / 2, Math.min(l.h - 82, 490), l.w - 36);
     ctx.restore();
+    drawThemeSprite(themeChefFile('helper'), { x: l.w - 90, y: 70, w: 72, h: 82 }, { scale: 1.04, shadow: false });
     const rects = skillShopRects();
     if (!rects.length) {
       ctx.save();
@@ -4922,11 +5031,15 @@
   function drawDailySkillCard(r) {
     const active = hasDailySkill(r.skill.id);
     ctx.save();
-    ctx.fillStyle = active ? '#111' : '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = active ? THEME.mint : (r.skill.type === 'active' ? '#e8dcf7' : THEME.surface);
+    ctx.strokeStyle = active ? THEME.mintDeep : (r.skill.type === 'active' ? THEME.purple : THEME.line);
+    ctx.lineWidth = 2;
     roundRect(r.x, r.y, r.w, r.h, 14, true, true, 3);
-    ctx.fillStyle = active ? '#fffdf6' : '#111';
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = active ? THEME.white : THEME.ink;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.font = '900 16px system-ui, sans-serif';
@@ -4946,10 +5059,14 @@
     const met = !!ps.met;
 
     drawPressTransform(r, `pet-${pet.id}`, () => {
-      ctx.fillStyle = '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 4;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = THEME.surface;
+      ctx.strokeStyle = THEME.line;
+      ctx.lineWidth = 2;
       roundRect(r.x, r.y, r.w, r.h, 18, true, true, 4);
+      ctx.shadowColor = 'transparent';
 
       const portrait = { x: r.x + 14, y: r.y + 14, w: Math.min(104, r.h - 28), h: r.h - 28 };
       ctx.save();
@@ -4961,7 +5078,7 @@
 
       const tx = portrait.x + portrait.w + 16;
       const tw = r.x + r.w - tx - 16;
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = THEME.ink;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.font = '900 19px system-ui, sans-serif';
@@ -4977,6 +5094,9 @@
   }
 
   function drawPetPortrait(pet, box) {
+    const roleMap = ART_THEME.petChefRoles || {};
+    const role = roleMap[pet.id];
+    if (role && drawThemeSprite(themeChefFile(role), box, { scale: 0.98, shadow: false })) return;
     const def = PEOPLE.find(p => p.name === pet.animalName);
     if (def) drawCardImage(def, box);
     drawChefHat(box.x + box.w / 2, box.y + box.h * 0.20, Math.min(box.w, box.h) * 0.38);
@@ -5040,10 +5160,17 @@
     drawMenuBackground();
     ctx.save();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fffdf6';
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 7;
+    ctx.fillStyle = THEME.surface;
     const panel = { x: l.w * 0.07, y: Math.max(88, l.h * 0.14), w: l.w * 0.86, h: Math.min(390, l.h * 0.52) };
     roundRect(panel.x, panel.y, panel.w, panel.h, 24, true, true, 5);
-    ctx.fillStyle = '#111';
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = THEME.line;
+    ctx.lineWidth = 2;
+    roundRect(panel.x, panel.y, panel.w, panel.h, 24, false, true, 2);
+    ctx.fillStyle = state.runSucceeded ? THEME.mintDeep : THEME.coralDeep;
     ctx.font = '900 34px system-ui, sans-serif';
     ctx.fillText(state.runSucceeded ? ui('安全收工', 'Safe Return') : ui('游戏结束', 'Game Over'), l.w / 2, panel.y + 48);
     ctx.font = '700 15px system-ui, sans-serif';
@@ -5063,6 +5190,7 @@
     ctx.font = '700 11px system-ui, sans-serif';
     wrapText(ui('本轮技能铺已刷新；可先去厨房卖料理再购买', 'Run shop refreshed; you can sell dishes before buying'), l.w / 2, panel.y + panel.h - 26, panel.w - 48, 15, 'center');
     ctx.restore();
+    drawThemeSprite(themeChefFile('service'), { x: panel.x + panel.w - 88, y: panel.y - 32, w: 94, h: 112 }, { scale: 1.03, shadow: false });
 
     const actions = resultActionRects();
     drawUIButton(actions.shop, ui('本轮技能铺', 'Skill Shop'), '', 'resultShop');
@@ -5120,9 +5248,16 @@
   function drawTitleBlock(title, sub) {
     const l = state.layout;
     ctx.save();
-    ctx.fillStyle = '#fffdf6';
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = THEME.surface;
     roundRect(l.w * 0.08, l.h * 0.18, l.w * 0.84, 104, 22, true, true, 5);
-    ctx.fillStyle = '#111';
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = THEME.line;
+    ctx.lineWidth = 2;
+    roundRect(l.w * 0.08, l.h * 0.18, l.w * 0.84, 104, 22, false, true, 2);
+    ctx.fillStyle = THEME.ink;
     ctx.textAlign = 'center';
     ctx.font = '900 34px system-ui, sans-serif';
     ctx.fillText(title, l.w / 2, l.h * 0.18 + 45);
@@ -5185,11 +5320,15 @@
   function drawMusicButton() {
     const r = musicButtonRect();
     drawPressTransform(r, 'music', () => {
-      ctx.fillStyle = state.musicOn ? '#111' : '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 9;
+      ctx.shadowOffsetY = 3;
+      ctx.fillStyle = state.musicOn ? THEME.navy : THEME.surface;
+      ctx.strokeStyle = THEME.line;
+      ctx.lineWidth = 2;
       roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
-      ctx.fillStyle = state.musicOn ? '#fffdf6' : '#111';
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = state.musicOn ? THEME.white : THEME.navy;
       ctx.font = '900 16px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -5199,11 +5338,15 @@
 
   function drawMiniButton(r, text, id = '') {
     drawPressTransform(r, id, () => {
-      ctx.fillStyle = '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 9;
+      ctx.shadowOffsetY = 3;
+      ctx.fillStyle = THEME.surface;
+      ctx.strokeStyle = THEME.line;
+      ctx.lineWidth = 2;
       roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
-      ctx.fillStyle = '#111';
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = THEME.navy;
       ctx.font = '800 14px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -5213,29 +5356,52 @@
 
   function drawUIButton(r, title, sub = '', id = '') {
     drawPressTransform(r, id, () => {
-      ctx.fillStyle = '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 5;
-      roundRect(r.x, r.y, r.w, r.h, 18, true, true, 5);
-      ctx.fillStyle = '#111';
+      const colors = buttonTone(id);
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 13;
+      ctx.shadowOffsetY = 5;
+      ctx.fillStyle = colors.fill;
+      ctx.strokeStyle = colors.stroke;
+      ctx.lineWidth = 2;
+      roundRect(r.x, r.y, r.w, r.h, Math.min(20, r.h * 0.27), true, true, 2);
+      ctx.shadowColor = 'transparent';
+      const shine = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+      shine.addColorStop(0, 'rgba(255,255,255,0.22)');
+      shine.addColorStop(0.55, 'rgba(255,255,255,0)');
+      ctx.fillStyle = shine;
+      roundRect(r.x + 3, r.y + 3, r.w - 6, Math.max(18, r.h * 0.45), Math.min(16, r.h * 0.22), true, false, 0);
+      ctx.fillStyle = colors.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = sub ? '900 22px system-ui, sans-serif' : '900 24px system-ui, sans-serif';
+      const titleSize = r.w < 180 ? (sub ? 19 : 21) : (sub ? 22 : 24);
+      ctx.font = `900 ${titleSize}px system-ui, sans-serif`;
       ctx.fillText(title, r.x + r.w / 2, r.y + r.h / 2 - (sub ? 10 : 0));
       if (sub) {
-        ctx.font = '700 12px system-ui, sans-serif';
+        ctx.globalAlpha = 0.86;
+        ctx.font = `${r.w < 180 ? 10 : 12}px system-ui, sans-serif`;
         ctx.fillText(sub, r.x + r.w / 2, r.y + r.h / 2 + 18);
       }
     });
   }
 
+  function buttonTone(id) {
+    const tone = ART_THEME.buttonTones && ART_THEME.buttonTones[id] ? ART_THEME.buttonTones[id] : '';
+    const map = {
+      coral: { fill: THEME.coral, stroke: THEME.coralDeep, text: THEME.white },
+      mint: { fill: THEME.mint, stroke: THEME.mintDeep, text: THEME.white },
+      purple: { fill: THEME.purple, stroke: '#7459ad', text: THEME.white },
+      navy: { fill: THEME.navy, stroke: THEME.navyDeep, text: THEME.white }
+    };
+    return map[tone] || { fill: THEME.surface, stroke: THEME.line, text: THEME.ink };
+  }
+
   function drawTab(r, text, active) {
     ctx.save();
-    ctx.fillStyle = active ? '#111' : '#fffdf6';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 3;
+    ctx.fillStyle = active ? THEME.mint : THEME.surface;
+    ctx.strokeStyle = active ? THEME.mintDeep : THEME.line;
+    ctx.lineWidth = 2;
     roundRect(r.x, r.y, r.w, r.h, 13, true, true, 3);
-    ctx.fillStyle = active ? '#fffdf6' : '#111';
+    ctx.fillStyle = active ? THEME.white : THEME.ink;
     ctx.font = '800 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
