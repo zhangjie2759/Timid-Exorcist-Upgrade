@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'v0.23.0_clean3d_theme_bridge';
+  const VERSION = 'v0.24.0_full_food_cast_buttons';
   const TEST_PANTRY_STOCK = 99;
   const LOADOUT_LIMITS = { active: 1, support: 2 };
   const BUSINESS_TITLES = [
@@ -327,8 +327,25 @@
   function randItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function isEn() { return state.lang === 'en'; }
   function ui(zh, en) { return isEn() ? en : zh; }
-  function displayName(item) { return isEn() ? (item.nameEn || item.name) : item.name; }
-  function displayDesc(item) { return isEn() ? (item.descEn || item.desc || 'No record yet.') : (item.desc || '暂无记录'); }
+  function themeGhostSkin(item) {
+    return item && ART_THEME.ghostSkins && ART_THEME.ghostSkins[item.name]
+      ? ART_THEME.ghostSkins[item.name]
+      : null;
+  }
+  function themeGhostFile(item) {
+    const skin = themeGhostSkin(item);
+    return skin ? themeFoodFile(skin.foodId) : '';
+  }
+  function displayName(item) {
+    const skin = themeGhostSkin(item);
+    if (skin) return isEn() ? (skin.nameEn || skin.name) : skin.name;
+    return isEn() ? (item.nameEn || item.name) : item.name;
+  }
+  function displayDesc(item) {
+    const skin = themeGhostSkin(item);
+    if (skin) return isEn() ? (skin.descEn || skin.desc) : skin.desc;
+    return isEn() ? (item.descEn || item.desc || 'No record yet.') : (item.desc || '暂无记录');
+  }
 
   function localDayKey(date = new Date()) {
     const y = date.getFullYear();
@@ -657,15 +674,15 @@
   }
 
   function preloadFilesList() {
-    const themeFiles = [
-      ...Object.values(ART_THEME.chefs || {}),
-      ...Object.values(ART_THEME.foodMonsters || {})
-    ].filter(Boolean);
+    const themeFiles = Array.isArray(ART_THEME.preload)
+      ? ART_THEME.preload.filter(Boolean)
+      : [
+          ...Object.values(ART_THEME.chefs || {}),
+          ...Object.values(ART_THEME.foodMonsters || {})
+        ].filter(Boolean);
     return Array.from(new Set([
-      ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.seal, ROOM_ASSETS.talisman,
+      ROOM_ASSETS.wall, ROOM_ASSETS.room, ROOM_ASSETS.door, ROOM_ASSETS.frame, ROOM_ASSETS.talisman,
       ...GHOST_FIRE_FILES,
-      ...GHOSTS.map(g => g.file),
-      ...GHOSTS.map(g => g.sealFile).filter(Boolean),
       ...PEOPLE.map(p => p.file),
       ...themeFiles
     ]));
@@ -2810,9 +2827,10 @@
   }
 
   function drawCharacter(def, x, floorY, targetH, kind, scale = 1) {
-    const img = getAssetImage(def.file);
+    const skin = kind === 'ghost' || kind === 'boss' ? themeGhostSkin(def) : null;
+    const img = getAssetImage(skin ? themeGhostFile(def) : def.file);
     const roleScale = kind === 'ghost' ? 0.92 : kind === 'boss' ? 0.94 : 1;
-    const h = targetH * scale * (def.scale || 1) * roleScale;
+    const h = targetH * scale * (def.scale || 1) * (skin && skin.scale || 1) * roleScale;
     const aspect = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 0.70;
     const w = h * aspect;
     const y = floorY - h;
@@ -2824,7 +2842,28 @@
       ctx.shadowBlur = 24 + pulse * 16;
     }
     if (img) ctx.drawImage(img, x - w / 2, y, w, h);
+    else if (skin) drawFoodMonsterPlaceholder(displayName(def), x, y, w, h, kind);
     else drawFallbackCharacter(def.name || displayName(def), x, y, w, h, kind);
+    ctx.restore();
+  }
+
+  function drawFoodMonsterPlaceholder(name, x, y, w, h, kind) {
+    ctx.save();
+    const pulse = 0.5 + Math.sin(state.t * 3.4) * 0.5;
+    ctx.globalAlpha = 0.72 + pulse * 0.16;
+    ctx.fillStyle = kind === 'boss' ? THEME.coralDeep : THEME.navy;
+    ctx.strokeStyle = THEME.white;
+    ctx.lineWidth = Math.max(2, h * 0.018);
+    ctx.beginPath();
+    ctx.ellipse(x, y + h * 0.52, Math.max(18, w * 0.38), h * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = THEME.white;
+    ctx.font = `900 ${Math.max(10, Math.min(16, h * 0.08))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(name || '').slice(0, 5), x, y + h * 0.52, Math.max(36, w * 0.72));
     ctx.restore();
   }
 
@@ -3017,7 +3056,8 @@
     const iconAreaW = markW * 0.82;
     const iconCenterY = markY + markH * 0.43;
     content.ghosts.forEach((g, i) => {
-      const img = getAssetImage(g.sealFile || g.file);
+      const skinFile = themeGhostFile(g);
+      const img = getAssetImage(skinFile || g.sealFile || g.file);
       const h = markH * (count === 1 ? 0.66 : 0.54);
       const aspect = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 0.72;
       const w = h * aspect;
@@ -3175,7 +3215,7 @@
     ctx.fillText(ui(`难度 ${diff}  最高 ${state.save.bestRoom || 1}`, `${diff}  Best ${state.save.bestRoom || 1}`), textX, 41, textMax);
 
     ctx.font = '700 10.5px system-ui, sans-serif';
-    ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${prog.boss.name}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), textX, 59, textMax);
+    ctx.fillText(ui(`进度 ${prog.index}/25  Boss：${displayName(prog.boss)}`, `Progress ${prog.index}/25  Boss: ${displayName(prog.boss)}`), textX, 59, textMax);
 
     ctx.font = '700 10px system-ui, sans-serif';
     ctx.fillText(ui(`本局食材 ${countMapEntries(state.runRewards.ingredients)}  今日技能 ${state.save.dailySkills.ids.length}`, `Run food ${countMapEntries(state.runRewards.ingredients)}  Skills ${state.save.dailySkills.ids.length}`), 16, 84, l.w - 32);
@@ -3253,15 +3293,14 @@
       freshSeal: ui(`封鲜符 ×${state.freshSeals}`, `Fresh ×${state.freshSeals}`)
     };
     drawPressTransform(r, `runSkill-${r.id}`, () => {
-      ctx.fillStyle = active ? THEME.coral : THEME.surface;
-      ctx.strokeStyle = active ? THEME.coralDeep : THEME.line;
-      ctx.lineWidth = 2;
-      roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
-      ctx.fillStyle = active ? THEME.white : THEME.ink;
+      const colors = drawThemeButtonBase(r, active ? 'seal' : r.id, { compact: true, active });
+      const icon = buttonIcon(r.id);
+      if (icon) drawThemeButtonGlyph(icon, r.x + 18, r.y + r.h / 2 - 2, 17, colors.text);
+      ctx.fillStyle = colors.text;
       ctx.font = `${r.w < 100 ? 11 : 12}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(labels[r.id] || r.id, r.x + r.w / 2, r.y + r.h / 2, r.w - 8);
+      ctx.fillText(labels[r.id] || r.id, r.x + r.w / 2 + (icon ? 8 : 0), r.y + r.h / 2 - 2, r.w - (icon ? 38 : 8));
     });
   }
 
@@ -3298,13 +3337,17 @@
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      ctx.fillStyle = ready || active ? '#fffdf6' : '#d7d7d7';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 4;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = ready || active ? THEME.surface : '#d6dde5';
+      ctx.strokeStyle = ready || active ? THEME.navy : '#8a94a3';
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      ctx.shadowColor = 'transparent';
       drawEyeGlyph(cx, cy, 42, open, progress, active ? activeRemaining : 0);
       ctx.restore();
     });
@@ -3399,13 +3442,17 @@
         ctx.stroke();
         ctx.restore();
       }
-      ctx.fillStyle = exhausted ? '#b9b7b5' : remaining > 0 ? '#d2d0d7' : '#29244d';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 4;
+      ctx.shadowColor = THEME.shadow;
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = exhausted ? '#c8c6ca' : remaining > 0 ? '#ded8eb' : THEME.purple;
+      ctx.strokeStyle = exhausted ? '#8f8d93' : '#7459ad';
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(cx, cy, r.w / 2 - 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      ctx.shadowColor = 'transparent';
       ctx.strokeStyle = exhausted ? '#777' : remaining > 0 ? '#8e8a9e' : '#6ee7ff';
       ctx.lineWidth = 5;
       ctx.beginPath();
@@ -3489,24 +3536,15 @@
   }
 
   function drawSealButton(r) {
-    const img = getAssetImage(ROOM_ASSETS.seal);
     drawPressTransform(r, 'seal', () => {
-      ctx.shadowColor = THEME.shadow;
-      ctx.shadowBlur = 14;
-      ctx.shadowOffsetY = 5;
-      ctx.fillStyle = THEME.coral;
-      ctx.strokeStyle = THEME.coralDeep;
-      ctx.lineWidth = 3;
-      roundRect(r.x, r.y, r.w, r.h, 24, true, true, 3);
-      ctx.shadowColor = 'transparent';
-      if (img) drawContainImage(img, r.x + 22, r.y + 8, r.w - 44, r.h - 16);
-      else {
-        ctx.fillStyle = THEME.white;
-        ctx.font = '900 25px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('封 印', r.x + r.w / 2, r.y + r.h / 2);
-      }
+      const colors = drawThemeButtonBase(r, 'seal', { roundness: 30 });
+      const iconX = r.x + r.w * 0.30;
+      drawThemeButtonGlyph('seal', iconX, r.y + r.h / 2 - 4, 38, colors.text);
+      ctx.fillStyle = colors.text;
+      ctx.font = '900 25px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ui('封 印', 'SEAL'), r.x + r.w * 0.63, r.y + r.h / 2 - 4, r.w * 0.56);
     });
   }
 
@@ -3520,15 +3558,13 @@
     ctx.scale(beat * press, beat * press);
     ctx.globalAlpha = isPressed('bossSeal') ? 0.86 : 1;
     const rr = { x: -r.w / 2, y: -r.h / 2, w: r.w, h: r.h };
-    ctx.fillStyle = '#fff06d';
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 5;
-    roundRect(rr.x, rr.y, rr.w, rr.h, 18, true, true, 5);
-    ctx.fillStyle = '#111';
+    const colors = drawThemeButtonBase(rr, 'bossSeal', { roundness: 24 });
+    drawThemeButtonGlyph('seal', -rr.w * 0.30, -4, 34, colors.text);
+    ctx.fillStyle = colors.text;
     ctx.font = '900 24px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(ui('疯狂贴封印！', 'Seal Fast!'), 0, 0);
+    ctx.fillText(ui('疯狂贴封印！', 'Seal Fast!'), rr.w * 0.09, -4, rr.w * 0.70);
     ctx.restore();
   }
 
@@ -3694,8 +3730,8 @@
     const tabW = Math.min(146, (l.w - 44) / 2);
     const ghostTab = { x: 18, y: tabY, w: tabW, h: 42 };
     const peopleTab = { x: 28 + tabW, y: tabY, w: tabW, h: 42 };
-    drawTab(ghostTab, `${ui('鬼图鉴', 'Ghosts')} ${seenGhostCount()}/${GHOSTS.length}`, state.galleryTab === 'ghosts');
-    drawTab(peopleTab, `${ui('小动物图鉴', 'Animals')} ${seenPeopleCount()}/${PEOPLE.length}`, state.galleryTab === 'people');
+    drawTab(ghostTab, `${ui('食材怪', 'Food Spirits')} ${seenGhostCount()}/${GHOSTS.length}`, state.galleryTab === 'ghosts', 'ghostTab');
+    drawTab(peopleTab, `${ui('小厨师', 'Chefs')} ${seenPeopleCount()}/${PEOPLE.length}`, state.galleryTab === 'people', 'peopleTab');
 
     const seenMap = state.galleryTab === 'ghosts' ? state.save.ghosts : state.save.people;
     ctx.save();
@@ -4001,33 +4037,29 @@
     const price = dailyDishPrice(r.recipe);
     drawPressTransform(r, `market-${r.recipe.id}`, () => {
       ctx.save();
-      ctx.fillStyle = stock > 0 ? '#fff4c9' : '#eee5cf';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
-      roundRect(r.x, r.y, r.w, r.h, 7, true, true, 3);
+      const cardColors = drawThemeButtonBase(r, stock > 0 ? 'marketDish' : '', { compact: true });
       ctx.fillStyle = advice.color;
-      ctx.fillRect(r.x, r.y + 6, 7, r.h - 12);
-      ctx.fillStyle = '#b72820';
+      roundRect(r.x + 6, r.y + 9, 6, r.h - 24, 3, true, false, 0);
+      ctx.fillStyle = THEME.coralDeep;
       ctx.beginPath();
       ctx.arc(r.x + r.w / 2, r.y + 4, 4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = cardColors.text;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.font = '900 9.5px system-ui, sans-serif';
       ctx.fillText(isEn() ? r.recipe.nameEn : r.recipe.name, r.x + 13, r.y + 15, r.w - 59);
-      ctx.fillStyle = '#fffdf6';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 1.8;
+      ctx.fillStyle = THEME.white;
+      ctx.strokeStyle = THEME.line;
+      ctx.lineWidth = 1.4;
       roundRect(r.x + r.w - 47, r.y + 7, 38, 18, 9, true, true, 1.8);
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = THEME.navy;
       ctx.textAlign = 'center';
       ctx.font = '900 8.5px system-ui, sans-serif';
       ctx.fillText(ui(`库存×${stock}`, `×${stock}`), r.x + r.w - 28, r.y + 16);
 
       ctx.textAlign = 'left';
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = THEME.ink;
       ctx.font = `900 ${r.w > 220 ? 24 : 21}px ui-monospace, monospace`;
       const priceText = `${price}`;
       const priceWidth = ctx.measureText(priceText).width;
@@ -4037,23 +4069,21 @@
 
       const adviceRect = { x: r.x + r.w - 76, y: r.y + 29, w: 64, h: 20 };
       ctx.fillStyle = advice.color;
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = THEME.navyDeep;
+      ctx.lineWidth = 1.2;
       roundRect(adviceRect.x, adviceRect.y, adviceRect.w, adviceRect.h, 10, true, true, 1.6);
-      ctx.fillStyle = '#fff7df';
+      ctx.fillStyle = THEME.white;
       ctx.textAlign = 'center';
       ctx.font = '900 9px system-ui, sans-serif';
       ctx.fillText(isEn() ? advice.labelEn : advice.label, adviceRect.x + adviceRect.w / 2, adviceRect.y + adviceRect.h / 2);
 
       const sell = { x: r.x + 12, y: r.y + 53, w: r.w - 24, h: 16 };
-      ctx.fillStyle = stock > 0 ? '#b72820' : '#aaa49a';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 1.8;
-      roundRect(sell.x, sell.y, sell.w, sell.h, 4, true, true, 1.8);
-      ctx.fillStyle = stock > 0 ? '#fff7df' : '#4e4b47';
+      const sellColors = drawThemeButtonBase(sell, stock > 0 ? 'dishSell' : '', { compact: true, active: stock > 0 });
+      drawThemeButtonGlyph('coins', sell.x + 13, sell.y + 6, 11, sellColors.text);
+      ctx.fillStyle = sellColors.text;
       ctx.textAlign = 'center';
       ctx.font = '900 8px system-ui, sans-serif';
-      ctx.fillText(stock > 0 ? ui('卖出 1 份', 'SELL 1') : ui('暂无库存', 'NO STOCK'), sell.x + sell.w / 2, sell.y + sell.h / 2);
+      ctx.fillText(stock > 0 ? ui('卖出 1 份', 'SELL 1') : ui('暂无库存', 'NO STOCK'), sell.x + sell.w / 2 + 6, sell.y + 6);
       ctx.restore();
     });
   }
@@ -4110,36 +4140,10 @@
   function drawKitchenWallObject(r, type, label, pressId) {
     drawPressTransform(r, pressId, () => {
       ctx.save();
-      ctx.shadowColor = THEME.shadow;
-      ctx.shadowBlur = 7;
-      ctx.shadowOffsetY = 3;
-      ctx.strokeStyle = THEME.line;
-      ctx.lineWidth = 2;
-      if (type === 'chefs') {
-        ctx.fillStyle = THEME.surfaceStrong;
-        roundRect(r.x, r.y, r.w, r.h, 5, true, true, 2.5);
-        ctx.fillStyle = THEME.surface;
-        roundRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10, 3, true, true, 1.5);
-        drawChefHat(r.x + 20, r.y + 20, 18);
-      } else if (type === 'upgrade') {
-        ctx.fillStyle = '#dfecea';
-        roundRect(r.x, r.y + 4, r.w, r.h - 8, 5, true, true, 2.5);
-        ctx.fillStyle = THEME.mintDeep;
-        ctx.fillRect(r.x + 8, r.y + 12, 22, 17);
-        ctx.beginPath();
-        ctx.arc(r.x + 19, r.y + 12, 8, Math.PI, 0);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = THEME.coral;
-        roundRect(r.x, r.y, r.w, r.h, 5, true, true, 2.5);
-        ctx.fillStyle = THEME.yellow;
-        ctx.fillRect(r.x + 8, r.y + 7, 20, 28);
-        ctx.strokeRect(r.x + 8, r.y + 7, 20, 28);
-        ctx.fillStyle = THEME.coralDeep;
-        ctx.fillRect(r.x + 15, r.y + 12, 6, 16);
-      }
-      ctx.shadowColor = 'transparent';
-      ctx.fillStyle = type === 'shop' ? THEME.white : THEME.ink;
+      const colors = drawThemeButtonBase(r, pressId, { compact: true });
+      const icon = buttonIcon(pressId);
+      if (icon) drawThemeButtonGlyph(icon, r.x + 19, r.y + r.h / 2 - 2, 19, colors.text);
+      ctx.fillStyle = colors.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 9px system-ui, sans-serif';
@@ -4152,18 +4156,9 @@
     const r = kitchenPrepareRect();
     drawPressTransform(r, 'kitchenPrepare', () => {
       ctx.save();
-      ctx.fillStyle = '#315b55';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3.5;
-      roundRect(r.x, r.y, r.w, r.h, 8, true, true, 3.5);
-      ctx.fillStyle = '#e7c873';
-      ctx.fillRect(r.x + 8, r.y + 7, 28, r.h - 14);
-      ctx.strokeRect(r.x + 8, r.y + 7, 28, r.h - 14);
-      ctx.fillStyle = '#111';
-      ctx.beginPath();
-      ctx.arc(r.x + 29, r.y + r.h / 2, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff7df';
+      const colors = drawThemeButtonBase(r, 'kitchenPrepare', { compact: true });
+      drawThemeButtonGlyph('door', r.x + 26, r.y + r.h / 2 - 2, 25, colors.text);
+      ctx.fillStyle = colors.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 13px system-ui, sans-serif';
@@ -4668,24 +4663,14 @@
       const cx = r.x + r.w / 2;
       const cy = r.y + r.h / 2;
       ctx.save();
-      ctx.fillStyle = active ? '#f1c95e' : '#c8cfca';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = active ? 3.5 : 2.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 17, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.strokeStyle = '#a84631';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 12);
-      ctx.lineTo(cx + (active ? 8 : 0), cy - 6);
-      ctx.stroke();
-      ctx.fillStyle = '#111';
+      const colors = drawThemeButtonBase(r, active ? pressId : '', { compact: true, active });
+      const icon = buttonIcon(pressId);
+      if (icon) drawThemeButtonGlyph(icon, r.x + 20, cy - 2, 18, colors.text);
+      ctx.fillStyle = colors.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '900 9px system-ui, sans-serif';
-      ctx.fillText(label, cx, cy + 2, 30);
+      ctx.font = '900 11px system-ui, sans-serif';
+      ctx.fillText(label, cx + 10, cy - 2, r.w - 42);
       ctx.restore();
     });
   }
@@ -4695,22 +4680,9 @@
     const duration = formatKitchenTime(kitchenCookDuration());
     drawPressTransform(r, 'cookRecipe', () => {
       ctx.save();
-      ctx.fillStyle = '#171d1c';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
-      roundRect(r.x, r.y, r.w, r.h, 7, true, true, 3);
-      ctx.fillStyle = '#f1c95e';
-      ctx.beginPath();
-      ctx.arc(r.x + 25, r.y + r.h / 2, 13, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#c93b2d';
-      ctx.beginPath();
-      ctx.moveTo(r.x + 25, r.y + 10);
-      ctx.quadraticCurveTo(r.x + 37, r.y + 24, r.x + 25, r.y + 34);
-      ctx.quadraticCurveTo(r.x + 13, r.y + 24, r.x + 25, r.y + 10);
-      ctx.fill();
-      ctx.fillStyle = '#fff7df';
+      const colors = drawThemeButtonBase(r, 'cookRecipe', { compact: true });
+      drawThemeButtonGlyph('flame', r.x + 25, r.y + r.h / 2 - 2, 25, colors.text);
+      ctx.fillStyle = colors.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 12px system-ui, sans-serif';
@@ -4927,32 +4899,21 @@
     const opportunity = dish ? null : bestMarketOpportunity();
     drawPressTransform(r, 'dishAction', () => {
       ctx.save();
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(r.x + 34, r.y);
-      ctx.lineTo(r.x + 52, r.y + 9);
-      ctx.moveTo(r.x + r.w - 34, r.y);
-      ctx.lineTo(r.x + r.w - 52, r.y + 9);
-      ctx.stroke();
-      ctx.fillStyle = dish ? '#7c302b' : '#263d38';
-      roundRect(r.x, r.y + 8, r.w, r.h - 8, 5, true, true, 2.5);
-      ctx.strokeStyle = '#f1d18a';
-      ctx.lineWidth = 1.5;
-      roundRect(r.x + 5, r.y + 13, r.w - 10, r.h - 18, 3, false, true, 1.5);
-      ctx.fillStyle = '#fff4cf';
+      const colors = drawThemeButtonBase(r, dish ? 'seal' : 'dishAction', { compact: true });
+      drawThemeButtonGlyph(dish ? 'flame' : 'coins', r.x + 24, r.y + r.h / 2 - 2, 22, colors.text);
+      ctx.fillStyle = colors.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 11px system-ui, sans-serif';
       const headline = dish ? ui('端去清理', 'CLEAR PLATE')
         : opportunity ? ui(`${marketAdvice(opportunity).label} · ${opportunity.name}`, `${marketAdvice(opportunity).labelEn} · ${opportunity.nameEn}`)
           : ui('今日收购价 · 暂无可卖料理', 'TODAY’S PRICES · NOTHING TO SELL');
-      ctx.fillText(headline, r.x + r.w / 2, r.y + 25, r.w - 18);
+      ctx.fillText(headline, r.x + r.w / 2 + 10, r.y + 22, r.w - 58);
       ctx.font = '700 8.5px system-ui, sans-serif';
       const detail = dish ? ui('黑暗料理不能出售', 'Dark dish cannot sell')
         : opportunity ? ui(`${dailyDishPrice(opportunity)}铜钱 · 库存×${state.save.dishInventory[opportunity.id]} · 点开查看`, `${dailyDishPrice(opportunity)} coins · ×${state.save.dishInventory[opportunity.id]} · tap to view`)
           : ui(`仓库共 ${count} 份 · 点开查看全部价格`, `${count} stored · tap for all prices`);
-      ctx.fillText(detail, r.x + r.w / 2, r.y + 38, r.w - 18);
+      ctx.fillText(detail, r.x + r.w / 2 + 10, r.y + 36, r.w - 58);
       ctx.restore();
     });
   }
@@ -5103,14 +5064,15 @@
   }
 
   function drawCardImage(item, box) {
-    const img = getAssetImage(item.file);
+    const skin = themeGhostSkin(item);
+    const img = getAssetImage(skin ? themeGhostFile(item) : item.file);
     if (img) {
       const pad = 2;
       const x = box.x + pad;
       const y = box.y + pad;
       const w = box.w - pad * 2;
       const h = box.h - pad * 2;
-      const galleryScale = item.galleryScale || 1;
+      const galleryScale = skin && skin.galleryScale || item.galleryScale || 1;
 
       if (galleryScale === 1) {
         drawContainImage(img, x, y, w, h);
@@ -5126,6 +5088,8 @@
         dh *= galleryScale;
         ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
       }
+    } else if (skin) {
+      drawFoodMonsterPlaceholder(displayName(item), box.x + box.w / 2, box.y + box.h * 0.08, box.w * 0.58, box.h * 0.88, 'ghost');
     } else {
       drawFallbackCharacter(item.name, box.x + box.w / 2, box.y + box.h * 0.1, box.w * 0.55, box.h * 0.86, state.galleryTab === 'people' ? 'person' : 'ghost');
     }
@@ -5320,68 +5284,86 @@
   function drawMusicButton() {
     const r = musicButtonRect();
     drawPressTransform(r, 'music', () => {
-      ctx.shadowColor = THEME.shadow;
-      ctx.shadowBlur = 9;
-      ctx.shadowOffsetY = 3;
-      ctx.fillStyle = state.musicOn ? THEME.navy : THEME.surface;
-      ctx.strokeStyle = THEME.line;
-      ctx.lineWidth = 2;
-      roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
-      ctx.shadowColor = 'transparent';
-      ctx.fillStyle = state.musicOn ? THEME.white : THEME.navy;
-      ctx.font = '900 16px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(state.musicOn ? '♪' : '♫', r.x + r.w / 2, r.y + r.h / 2 + 1);
+      drawThemeButtonBase(r, 'music', { active: state.musicOn, compact: true });
+      drawThemeButtonGlyph('music', r.x + r.w / 2, r.y + r.h / 2 - 1, 19, state.musicOn ? THEME.white : THEME.navy);
     });
   }
 
   function drawMiniButton(r, text, id = '') {
     drawPressTransform(r, id, () => {
-      ctx.shadowColor = THEME.shadow;
-      ctx.shadowBlur = 9;
-      ctx.shadowOffsetY = 3;
-      ctx.fillStyle = THEME.surface;
-      ctx.strokeStyle = THEME.line;
-      ctx.lineWidth = 2;
-      roundRect(r.x, r.y, r.w, r.h, 12, true, true, 3);
-      ctx.shadowColor = 'transparent';
-      ctx.fillStyle = THEME.navy;
+      const colors = drawThemeButtonBase(r, id, { compact: true });
+      const icon = buttonIcon(id);
+      const iconX = icon && r.w >= 66 ? r.x + 17 : r.x + r.w / 2;
+      if (icon) drawThemeButtonGlyph(icon, iconX, r.y + r.h / 2 - 1, Math.min(17, r.h * 0.48), colors.text);
+      ctx.fillStyle = colors.text;
       ctx.font = '800 14px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, r.x + r.w / 2, r.y + r.h / 2);
+      const textX = icon && r.w >= 66 ? r.x + r.w * 0.61 : r.x + r.w / 2;
+      ctx.fillText(text, textX, r.y + r.h / 2 - 1, icon ? r.w - 34 : r.w - 8);
     });
   }
 
   function drawUIButton(r, title, sub = '', id = '') {
     drawPressTransform(r, id, () => {
-      const colors = buttonTone(id);
-      ctx.shadowColor = THEME.shadow;
-      ctx.shadowBlur = 13;
-      ctx.shadowOffsetY = 5;
-      ctx.fillStyle = colors.fill;
-      ctx.strokeStyle = colors.stroke;
-      ctx.lineWidth = 2;
-      roundRect(r.x, r.y, r.w, r.h, Math.min(20, r.h * 0.27), true, true, 2);
-      ctx.shadowColor = 'transparent';
-      const shine = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
-      shine.addColorStop(0, 'rgba(255,255,255,0.22)');
-      shine.addColorStop(0.55, 'rgba(255,255,255,0)');
-      ctx.fillStyle = shine;
-      roundRect(r.x + 3, r.y + 3, r.w - 6, Math.max(18, r.h * 0.45), Math.min(16, r.h * 0.22), true, false, 0);
+      const colors = drawThemeButtonBase(r, id);
+      const icon = buttonIcon(id);
+      const iconSize = Math.min(31, r.h * 0.46, r.w * 0.20);
+      const iconX = icon ? r.x + Math.max(27, r.w * 0.18) : r.x + r.w / 2;
+      if (icon) {
+        ctx.save();
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = THEME.white;
+        ctx.beginPath();
+        ctx.arc(iconX, r.y + r.h / 2 - 2, iconSize * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        drawThemeButtonGlyph(icon, iconX, r.y + r.h / 2 - 2, iconSize, colors.text);
+      }
       ctx.fillStyle = colors.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const titleSize = r.w < 180 ? (sub ? 19 : 21) : (sub ? 22 : 24);
       ctx.font = `900 ${titleSize}px system-ui, sans-serif`;
-      ctx.fillText(title, r.x + r.w / 2, r.y + r.h / 2 - (sub ? 10 : 0));
+      const textX = icon ? r.x + r.w * 0.60 : r.x + r.w / 2;
+      const textW = icon ? r.w * 0.70 - 12 : r.w - 18;
+      ctx.fillText(title, textX, r.y + r.h / 2 - (sub ? 10 : 0) - 2, textW);
       if (sub) {
         ctx.globalAlpha = 0.86;
         ctx.font = `${r.w < 180 ? 10 : 12}px system-ui, sans-serif`;
-        ctx.fillText(sub, r.x + r.w / 2, r.y + r.h / 2 + 18);
+        ctx.fillText(sub, textX, r.y + r.h / 2 + 17, textW);
       }
     });
+  }
+
+  function drawThemeButtonBase(r, id = '', options = {}) {
+    const colors = buttonTone(id);
+    const radius = options.roundness || Math.min(options.compact ? 14 : 20, r.h * 0.27);
+    const lift = Math.max(3, Math.min(6, r.h * 0.10));
+    const fill = options.active && colors.fill === THEME.surface ? THEME.navy : colors.fill;
+    const text = options.active && colors.fill === THEME.surface ? THEME.white : colors.text;
+    ctx.save();
+    ctx.shadowColor = THEME.shadow;
+    ctx.shadowBlur = options.compact ? 8 : 13;
+    ctx.shadowOffsetY = lift + 1;
+    ctx.fillStyle = colors.stroke;
+    roundRect(r.x, r.y + lift, r.w, Math.max(1, r.h - lift), radius, true, false, 0);
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = colors.stroke;
+    ctx.lineWidth = 2;
+    roundRect(r.x, r.y, r.w, Math.max(1, r.h - lift), radius, true, true, 2);
+    const shine = ctx.createLinearGradient(0, r.y, 0, r.y + r.h - lift);
+    shine.addColorStop(0, 'rgba(255,255,255,0.34)');
+    shine.addColorStop(0.50, 'rgba(255,255,255,0.05)');
+    shine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shine;
+    roundRect(r.x + 3, r.y + 3, r.w - 6, Math.max(12, (r.h - lift) * 0.44), Math.max(6, radius - 3), true, false, 0);
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = 1;
+    roundRect(r.x + 4, r.y + 4, r.w - 8, Math.max(1, r.h - lift - 8), Math.max(5, radius - 4), false, true, 1);
+    ctx.restore();
+    return { ...colors, fill, text };
   }
 
   function buttonTone(id) {
@@ -5390,22 +5372,72 @@
       coral: { fill: THEME.coral, stroke: THEME.coralDeep, text: THEME.white },
       mint: { fill: THEME.mint, stroke: THEME.mintDeep, text: THEME.white },
       purple: { fill: THEME.purple, stroke: '#7459ad', text: THEME.white },
-      navy: { fill: THEME.navy, stroke: THEME.navyDeep, text: THEME.white }
+      navy: { fill: THEME.navy, stroke: THEME.navyDeep, text: THEME.white },
+      surface: { fill: THEME.surface, stroke: THEME.line, text: THEME.navy }
     };
     return map[tone] || { fill: THEME.surface, stroke: THEME.line, text: THEME.ink };
   }
 
-  function drawTab(r, text, active) {
+  function buttonIcon(id) {
+    return ART_THEME.buttonIcons && ART_THEME.buttonIcons[id] ? ART_THEME.buttonIcons[id] : '';
+  }
+
+  function drawThemeButtonGlyph(icon, cx, cy, size, color) {
+    if (!icon) return;
+    const s = Math.max(10, size);
     ctx.save();
-    ctx.fillStyle = active ? THEME.mint : THEME.surface;
-    ctx.strokeStyle = active ? THEME.mintDeep : THEME.line;
-    ctx.lineWidth = 2;
-    roundRect(r.x, r.y, r.w, r.h, 13, true, true, 3);
-    ctx.fillStyle = active ? THEME.white : THEME.ink;
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.8, s * 0.10);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (icon === 'arrow') {
+      ctx.beginPath(); ctx.moveTo(s * 0.32, -s * 0.32); ctx.lineTo(-s * 0.18, 0); ctx.lineTo(s * 0.32, s * 0.32); ctx.moveTo(-s * 0.15, 0); ctx.lineTo(s * 0.46, 0); ctx.stroke();
+    } else if (icon === 'door') {
+      ctx.beginPath(); ctx.moveTo(-s * 0.32, s * 0.40); ctx.lineTo(-s * 0.32, -s * 0.12); ctx.quadraticCurveTo(0, -s * 0.48, s * 0.32, -s * 0.12); ctx.lineTo(s * 0.32, s * 0.40); ctx.stroke(); ctx.beginPath(); ctx.arc(s * 0.13, s * 0.05, s * 0.04, 0, Math.PI * 2); ctx.fill();
+    } else if (icon === 'pot') {
+      ctx.beginPath(); ctx.moveTo(-s * 0.38, -s * 0.08); ctx.lineTo(s * 0.38, -s * 0.08); ctx.lineTo(s * 0.28, s * 0.30); ctx.quadraticCurveTo(0, s * 0.43, -s * 0.28, s * 0.30); ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-s * 0.22, -s * 0.25); ctx.lineTo(s * 0.22, -s * 0.25); ctx.moveTo(0, -s * 0.25); ctx.lineTo(0, -s * 0.38); ctx.stroke();
+    } else if (icon === 'book') {
+      ctx.beginPath(); ctx.moveTo(0, -s * 0.31); ctx.quadraticCurveTo(-s * 0.23, -s * 0.43, -s * 0.42, -s * 0.22); ctx.lineTo(-s * 0.42, s * 0.34); ctx.quadraticCurveTo(-s * 0.20, s * 0.18, 0, s * 0.36); ctx.quadraticCurveTo(s * 0.20, s * 0.18, s * 0.42, s * 0.34); ctx.lineTo(s * 0.42, -s * 0.22); ctx.quadraticCurveTo(s * 0.23, -s * 0.43, 0, -s * 0.31); ctx.lineTo(0, s * 0.36); ctx.stroke();
+    } else if (icon === 'clipboard') {
+      ctx.strokeRect(-s * 0.34, -s * 0.32, s * 0.68, s * 0.72); ctx.beginPath(); ctx.moveTo(-s * 0.14, -s * 0.38); ctx.lineTo(s * 0.14, -s * 0.38); ctx.lineTo(s * 0.18, -s * 0.20); ctx.lineTo(-s * 0.18, -s * 0.20); ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-s * 0.18, 0); ctx.lineTo(s * 0.18, 0); ctx.moveTo(-s * 0.18, s * 0.18); ctx.lineTo(s * 0.12, s * 0.18); ctx.stroke();
+    } else if (icon === 'chef') {
+      ctx.beginPath(); ctx.arc(-s * 0.22, -s * 0.18, s * 0.20, Math.PI * 0.75, Math.PI * 2.2); ctx.arc(0, -s * 0.30, s * 0.23, Math.PI, Math.PI * 2); ctx.arc(s * 0.22, -s * 0.18, s * 0.20, Math.PI * 0.8, Math.PI * 2.25); ctx.lineTo(s * 0.30, s * 0.06); ctx.lineTo(-s * 0.30, s * 0.06); ctx.closePath(); ctx.stroke(); ctx.strokeRect(-s * 0.30, s * 0.05, s * 0.60, s * 0.28);
+    } else if (icon === 'redo') {
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.34, -Math.PI * 0.30, Math.PI * 1.45); ctx.stroke(); ctx.beginPath(); ctx.moveTo(s * 0.36, -s * 0.25); ctx.lineTo(s * 0.36, s * 0.04); ctx.lineTo(s * 0.10, -s * 0.06); ctx.stroke();
+    } else if (icon === 'flame') {
+      ctx.beginPath(); ctx.moveTo(0, s * 0.42); ctx.bezierCurveTo(-s * 0.46, s * 0.20, -s * 0.30, -s * 0.12, -s * 0.06, -s * 0.42); ctx.quadraticCurveTo(-s * 0.02, -s * 0.08, s * 0.18, -s * 0.22); ctx.bezierCurveTo(s * 0.48, s * 0.12, s * 0.34, s * 0.34, 0, s * 0.42); ctx.stroke();
+    } else if (icon === 'stir') {
+      ctx.beginPath(); ctx.arc(-s * 0.08, s * 0.10, s * 0.30, 0, Math.PI * 2); ctx.moveTo(s * 0.18, -s * 0.05); ctx.lineTo(s * 0.46, -s * 0.30); ctx.stroke();
+    } else if (icon === 'steam') {
+      for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * s * 0.22, s * 0.35); ctx.bezierCurveTo(i * s * 0.30 - s * 0.10, s * 0.12, i * s * 0.30 + s * 0.10, -s * 0.12, i * s * 0.18, -s * 0.38); ctx.stroke(); }
+    } else if (icon === 'seal') {
+      ctx.beginPath(); ctx.arc(0, -s * 0.12, s * 0.18, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.moveTo(-s * 0.12, 0); ctx.lineTo(-s * 0.23, s * 0.38); ctx.lineTo(s * 0.23, s * 0.38); ctx.lineTo(s * 0.12, 0); ctx.closePath(); ctx.fill();
+    } else if (icon === 'crystal') {
+      ctx.beginPath(); ctx.moveTo(0, -s * 0.45); ctx.lineTo(s * 0.36, -s * 0.12); ctx.lineTo(s * 0.22, s * 0.40); ctx.lineTo(-s * 0.22, s * 0.40); ctx.lineTo(-s * 0.36, -s * 0.12); ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, -s * 0.45); ctx.lineTo(0, s * 0.40); ctx.moveTo(-s * 0.36, -s * 0.12); ctx.lineTo(s * 0.36, -s * 0.12); ctx.stroke();
+    } else if (icon === 'coins') {
+      ctx.beginPath(); ctx.ellipse(-s * 0.10, 0, s * 0.28, s * 0.34, 0, 0, Math.PI * 2); ctx.ellipse(s * 0.16, s * 0.08, s * 0.24, s * 0.30, 0, 0, Math.PI * 2); ctx.stroke();
+    } else if (icon === 'monster') {
+      ctx.beginPath(); ctx.arc(0, s * 0.04, s * 0.34, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(-s * 0.12, -s * 0.02, s * 0.045, 0, Math.PI * 2); ctx.arc(s * 0.12, -s * 0.02, s * 0.045, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.moveTo(-s * 0.13, s * 0.18); ctx.quadraticCurveTo(0, s * 0.28, s * 0.13, s * 0.18); ctx.stroke();
+    } else if (icon === 'music') {
+      ctx.beginPath(); ctx.moveTo(s * 0.12, -s * 0.38); ctx.lineTo(s * 0.12, s * 0.20); ctx.moveTo(s * 0.12, -s * 0.38); ctx.lineTo(s * 0.36, -s * 0.28); ctx.stroke(); ctx.beginPath(); ctx.arc(-s * 0.02, s * 0.25, s * 0.16, 0, Math.PI * 2); ctx.fill();
+    } else if (icon === 'language') {
+      ctx.font = `900 ${s * 0.70}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(isEn() ? '中' : 'A', 0, 1);
+    }
+    ctx.restore();
+  }
+
+  function drawTab(r, text, active, id = '') {
+    ctx.save();
+    const colors = drawThemeButtonBase(r, active ? 'pets' : id, { compact: true, active });
+    const icon = buttonIcon(id);
+    if (icon) drawThemeButtonGlyph(icon, r.x + 20, r.y + r.h / 2 - 2, 18, colors.text);
+    ctx.fillStyle = colors.text;
     ctx.font = '800 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, r.x + r.w / 2, r.y + r.h / 2);
+    ctx.fillText(text, r.x + r.w / 2 + (icon ? 8 : 0), r.y + r.h / 2 - 2, r.w - (icon ? 44 : 12));
     ctx.restore();
   }
 

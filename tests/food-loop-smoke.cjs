@@ -108,8 +108,9 @@ sandbox.globalThis = sandbox;
 vm.runInNewContext(source, sandbox, { filename: gamePath });
 const api = sandbox.__foodTest;
 assert.ok(api, 'food loop test API should be exposed in the instrumented VM');
-assert.equal(api.VERSION, 'v0.23.0_clean3d_theme_bridge');
+assert.equal(api.VERSION, 'v0.24.0_full_food_cast_buttons');
 const themePath = path.join(__dirname, '..', 'ui-theme.js');
+const themeSource = fs.readFileSync(themePath, 'utf8');
 const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 assert.ok(fs.existsSync(themePath), 'replaceable art theme registry exists');
 assert.ok(indexSource.indexOf('./ui-theme.js') < indexSource.indexOf('./game.js'), 'theme registry loads before gameplay');
@@ -117,9 +118,18 @@ assert.ok(indexSource.indexOf('./ui-theme.js') < indexSource.indexOf('./game.js'
   'c01-head-chef.png', 'c02-tall-apprentice.png', 'c03-tiny-helper.png', 'c04-steam-chef.png', 'c05-serving-chef.png'
 ].forEach(file => assert.ok(fs.existsSync(path.join(__dirname, '..', 'images', 'redesign', 'clean3d-v1', 'characters', 'chefs', file)), `chef asset exists: ${file}`));
 [
-  'f01-tomato.png', 'f02-egg.png', 'f03-rice.png'
+  'f01-tomato.png', 'f02-egg.png', 'f03-rice.png', 'f04-water.png', 'f05-potato.png',
+  'f06-tofu.png', 'f07-mushroom.png', 'f08-green-pepper.png', 'f09-shrimp.png', 'f10-crab.png'
 ].forEach(file => assert.ok(fs.existsSync(path.join(__dirname, '..', 'images', 'redesign', 'clean3d-v1', 'characters', 'food-monsters', file)), `food-monster asset exists: ${file}`));
+['猼訑', '赤鱬', '当康', '混沌', '九尾狐', '夔牛', '麒麟', '穷奇', '饕餮', '狰', '烛阴']
+  .forEach(name => assert.match(themeSource, new RegExp(`['"]${name}['"]\\s*:`), `theme maps legacy save key: ${name}`));
 assert.match(source, /function drawThemeSprite\(/, 'runtime uses a replaceable theme sprite bridge');
+assert.match(source, /function themeGhostSkin\(/, 'legacy ghost data resolves through the food-monster skin registry');
+assert.match(source, /function drawFoodMonsterPlaceholder\(/, 'missing theme images use a food-monster placeholder instead of old ghost art');
+assert.doesNotMatch(source, /\.\.\.GHOSTS\.map\(g => g\.file\)/, 'old ghost sprites are not preloaded by the full replacement theme');
+assert.match(source, /function drawThemeButtonBase\(/, 'all semantic buttons share one replaceable themed base');
+assert.match(source, /function drawThemeButtonGlyph\(/, 'button icons are drawn through the shared vector glyph library');
+assert.doesNotMatch(source, /getAssetImage\(ROOM_ASSETS\.seal\)/, 'seal buttons no longer render the old seal image');
 assert.match(source, /themeFoodFile\(ingredient\.id\)/, 'ingredient art resolves through the theme registry');
 assert.match(source, /function drawFutureOrbGlyph\(/, 'Foresight uses its own future-orb glyph');
 assert.match(source, /function drawKitchenRoomBackground\(/, 'kitchen has a dedicated room scene');
